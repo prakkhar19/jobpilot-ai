@@ -1,0 +1,122 @@
+# JobPilot AI — self-hosted stack.
+#   cp .env.example .env && docker compose up --build -d
+# Only the frontend port is published (127.0.0.1 by default). PostgreSQL and Redis stay on the
+# internal network. Data lives in named volumes and survives rebuilds/upgrades.
+
+name: jobpilot
+
+x-app: &app
+  env_file: .env
+  environment:
+    DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-jobpilot}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}@postgres:5432/${POSTGRES_DB:-jobpilot}
+    REDIS_URL: redis://redis:6379/0
+    DATA_DIR: /data
+    INTERNAL_BASE_URL: http://backend:8000
+  volumes:
+    - appdata:/data
+  extra_hosts:
+    # Lets an AI endpoint on the host (e.g. Ollama) be reached as host.docker.internal on Linux too.
+    - "host.docker.internal:host-gateway"
+  restart: unless-stopped
+  networks: [internal]
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-jobpilot}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: ${POSTGRES_DB:-jobpilot}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+    networks: [internal]
+    stop_grace_period: 30s
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes", "--save", "60", "1"]
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+    networks: [internal]
+
+  backend:
+    <<: *app
+    build:
+      context: .
+      target: backend
+    image: jobpilot-backend:local
+    command: ["api"]
+    depends_on:
+      postgres: {condition: service_healthy}
+      redis: {condition: service_healthy}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/api/health/ready', timeout=4).status == 200 else 1)"]
+      interval: 10s
+      timeout: 6s
+      retries: 12
+      start_period: 20s
+    stop_grace_period: 25s
+
+  worker:
+    <<: *app
+    build:
+      context: .
+      target: worker
+    image: jobpilot-worker:local
+    command: ["worker"]
+    init: true
+    shm_size: "1gb"
+    depends_on:
+      backend: {condition: service_healthy}
+    healthcheck:
+      test: ["CMD-SHELL", "celery -A app.workers.celery_app inspect ping -d \"worker@$$HOSTNAME\" --timeout 10 | grep -q pong"]
+      interval: 60s
+      timeout: 20s
+      retries: 3
+      start_period: 30s
+    stop_grace_period: 60s
+
+  scheduler:
+    <<: *app
+    image: jobpilot-backend:local
+    command: ["scheduler"]
+    depends_on:
+      backend: {condition: service_healthy}
+    stop_grace_period: 10s
+
+  frontend:
+    build:
+      context: .
+      target: frontend
+    image: jobpilot-frontend:local
+    ports:
+      - "${JOBPILOT_BIND:-127.0.0.1}:${JOBPILOT_PORT:-8080}:8080"
+    depends_on:
+      backend: {condition: service_healthy}
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/healthz"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks: [internal]
+
+networks:
+  internal:
+
+volumes:
+  pgdata:
+  redisdata:
+  appdata:

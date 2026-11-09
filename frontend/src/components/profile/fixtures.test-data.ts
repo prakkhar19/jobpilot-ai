@@ -1,0 +1,48 @@
+import type { Profile } from '@/types/api'
+
+export function makeProfile(overrides: Partial<Profile> = {}): Profile {
+  return {
+    id: 'p1',
+    label: 'Primary profile',
+    full_name: 'Ada Lovelace',
+    email: 'ada@example.com',
+    phone: '',
+    location: 'London',
+    linkedin_url: '',
+    github_url: '',
+    portfolio_url: '',
+    headline: 'ML Engineer',
+    summary: 'Builds things.',
+    motivation: '',
+    achievements: [],
+    publications: [],
+    spoken_languages: ['English'],
+    application_facts: { 'Notice period': '1 month' },
+    educations: [],
+    experiences: [
+      {
+        company: 'Old Co',
+        title: 'Analyst',
+        location: '',
+        start_date: '2019-01',
+        end_date: '2020-01',
+        is_current: false,
+        bullets: ['Did analysis'],
+        technologies: ['Excel'],
+      },
+    ],
+    skills: [{ name: 'Python', category: 'language' }],
+    projects: [],
+    certifications: [],
+    status: 'draft',
+    is_active: true,
+    version: 1,
+    approved_at: null,
+    parse_method: 'rules',
+    parse_warnings: ['Could not detect dates for one role.'],
+    master_resume_id: 'r1',
+    created_at: '2026-01-01T00:00:00Z',
+    updated_at: '2026-01-01T00:00:00Z',
+    ...overrides,
+  }
+}

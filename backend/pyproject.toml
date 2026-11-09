@@ -1,0 +1,49 @@
+[project]
+name = "jobpilot-backend"
+version = "0.1.0"
+description = "JobPilot AI backend: API, workers and agents"
+requires-python = ">=3.12,<3.14"
+license = "MIT"
+dependencies = [
+  "fastapi",
+  "uvicorn[standard]",
+  "pydantic[email]",
+  "pydantic-settings",
+  "sqlalchemy",
+  "alembic",
+  "psycopg[binary]",
+  "redis",
+  "celery[redis]",
+  "httpx",
+  "argon2-cffi",
+  "cryptography",
+  "python-multipart",
+  "pypdf",
+  "python-docx",
+  "reportlab",
+  "playwright",
+  "beautifulsoup4",
+  "python-dateutil",
+  "anthropic>=2.6.0",
+]
+
+[dependency-groups]
+dev = ["pytest", "pytest-cov", "ruff", "respx"]
+
+[tool.ruff]
+line-length = 110
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "S"]
+ignore = ["S101", "B008", "S311", "E501"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["S"]
+"migrations/*" = ["E", "F", "I", "UP"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+markers = ["browser: requires Playwright Chromium", "postgres: requires PostgreSQL"]
+filterwarnings = ["ignore::DeprecationWarning"]

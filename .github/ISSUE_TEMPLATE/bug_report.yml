@@ -1,0 +1,33 @@
+name: Bug report
+description: Something isn't working
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: "**Do not include resumes, personal data, API keys or cookies.** Redact logs before pasting."
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: Steps to reproduce, expected vs actual behaviour.
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version / commit
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options: [Install / Docker, Onboarding & profile, Job discovery, Matching, Resume / cover letter, Applications, Agent / scheduler, UI, Other]
+  - type: textarea
+    id: env
+    attributes:
+      label: Environment
+      description: OS, CPU architecture, Docker version, AI provider type (not the key!)
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs (redacted)
+      render: shell

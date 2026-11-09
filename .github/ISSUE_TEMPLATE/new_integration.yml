@@ -1,0 +1,17 @@
+name: New job source / application provider
+description: Propose a new integration
+labels: [integration]
+body:
+  - type: input
+    id: platform
+    attributes:
+      label: Platform
+    validations:
+      required: true
+  - type: textarea
+    id: access
+    attributes:
+      label: Permitted access method
+      description: Link to the public API / terms that permit this access. Scraping that violates terms will not be accepted.
+    validations:
+      required: true
