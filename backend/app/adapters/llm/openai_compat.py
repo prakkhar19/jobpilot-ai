@@ -73,6 +73,9 @@ class OpenAICompatibleClient:
                     raise LLMError(f"Authentication with the AI provider failed: {msg}", status=resp.status_code)
                 if resp.status_code == 404:
                     raise LLMError(f"Model or endpoint not found: {msg}", status=404)
+                if resp.status_code == 410:
+                    raise LLMError(f"The model '{self.model}' has been retired by the provider. Choose a current "
+                                   f"model from the provider's model list and save again. ({msg})", status=410)
                 retryable = resp.status_code in (408, 409, 429) or resp.status_code >= 500
                 last = LLMError(f"AI provider error {resp.status_code}: {msg}", retryable=retryable, status=resp.status_code)
                 if not retryable:

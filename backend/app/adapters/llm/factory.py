@@ -16,7 +16,7 @@ PROVIDERS = {
              "base_url": "https://generativelanguage.googleapis.com/v1beta/openai", "model": "gemini-2.5-flash"},
             {"name": "OpenAI", "base_url": "https://api.openai.com/v1", "model": "gpt-4o-mini"},
             {"name": "NVIDIA NIM (Nemotron)", "base_url": "https://integrate.api.nvidia.com/v1",
-             "model": "nvidia/llama-3.3-nemotron-super-49b-v1"},
+             "model": "nvidia/nemotron-3-super-120b-a12b"},
             {"name": "Ollama (on the Docker host)", "base_url": "http://host.docker.internal:11434/v1",
              "model": "llama3.1"},
         ],

@@ -2,9 +2,12 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime
+import re
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+_EMAIL = re.compile(r"^[^@\s]+@[^@\s]+\.[A-Za-z]{2,}$")
 
 
 class AIProviderIn(BaseModel):
@@ -22,6 +25,16 @@ class AIProviderIn(BaseModel):
     enabled: bool = True
     input_price_per_mtok: float | None = Field(default=None, ge=0)
     output_price_per_mtok: float | None = Field(default=None, ge=0)
+
+    @field_validator("model", "embedding_model")
+    @classmethod
+    def _model_name(cls, v: str) -> str:
+        v = v.strip()
+        if _EMAIL.match(v):
+            raise ValueError("This looks like an email address, not a model name (your browser may have autofilled it).")
+        if any(c.isspace() for c in v):
+            raise ValueError("Model names cannot contain spaces.")
+        return v
 
 
 class AIProviderOut(BaseModel):

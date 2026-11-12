@@ -139,16 +139,16 @@ export function ProviderForm({
           </Select>
         </Field>
         <Field label="Display name" error={errors.name} required>
-          <Input value={name} onChange={(e) => setName(e.target.value)} maxLength={120} />
+          <Input name="provider-name" autoComplete="off" data-1p-ignore value={name} onChange={(e) => setName(e.target.value)} maxLength={120} />
         </Field>
         <Field label="Base URL" hint={entry ? `Default: ${entry.default_base_url}` : undefined}>
-          <Input type="url" value={baseUrl} onChange={(e) => setBaseUrl(e.target.value)} placeholder={entry?.default_base_url} />
+          <Input type="url" name="provider-base-url" autoComplete="off" data-1p-ignore value={baseUrl} onChange={(e) => setBaseUrl(e.target.value)} placeholder={entry?.default_base_url} />
         </Field>
         <Field label="Model" error={errors.model} required>
-          <Input value={model} onChange={(e) => setModel(e.target.value)} />
+          <Input name="provider-model" autoComplete="off" data-1p-ignore spellCheck={false} value={model} onChange={(e) => setModel(e.target.value)} />
         </Field>
         <Field label="Embedding model" hint="Optional; enables semantic matching with embeddings.">
-          <Input value={embeddingModel} onChange={(e) => setEmbeddingModel(e.target.value)} />
+          <Input name="provider-embedding-model" autoComplete="off" data-1p-ignore spellCheck={false} value={embeddingModel} onChange={(e) => setEmbeddingModel(e.target.value)} />
         </Field>
         <Field
           label="API key"
@@ -162,7 +162,7 @@ export function ProviderForm({
                 : 'Optional for local servers such as Ollama. Stored encrypted.'
           }
         >
-          <Input type="password" autoComplete="off" value={apiKey} onChange={(e) => setApiKey(e.target.value)} />
+          <Input type="password" name="provider-api-key" autoComplete="new-password" data-1p-ignore value={apiKey} onChange={(e) => setApiKey(e.target.value)} />
         </Field>
       </div>
       {provider?.has_api_key && (
