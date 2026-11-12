@@ -28,8 +28,9 @@ Your data stays on your server. You bring your own AI provider (or none at all).
 | Stage | What happens |
 |---|---|
 | **Onboarding** | Upload a PDF/DOCX resume → structured profile is extracted (rule-based, optionally AI-assisted with a grounding check) → you review, edit and approve it. The original file is stored unchanged. |
-| **Discovery** | Scheduled or on-demand search of Greenhouse, Lever and Ashby public job boards and company career pages with schema.org `JobPosting` data. Filters, de-duplication across sources, expiry checks. Postings from anywhere else (LinkedIn, Indeed, …) can be imported by pasting the text. |
-| **Matching** | Weighted, configurable score from required/preferred skills, content similarity (TF-IDF or embeddings), experience, title alignment, education and location — every component explained. Missing profile data is shown as *unknown*, never as a gap. |
+| **Discovery** | Runs around the clock (every 15 minutes by default): a built-in directory of 105 company job boards, job-alert emails from LinkedIn/Naukri/Wellfound/Instahyre, Adzuna, Remotive and Arbeitnow, plus any Greenhouse/Lever/Ashby board or career page you add. Filters, de-duplication across sources, expiry checks, and instant alerts for strong matches. Jobs found elsewhere are looked up on the company's own careers site so you can apply directly. |
+| **Location** | Pick cities, or set the country to **India** for region mode: office/hybrid jobs anywhere in India plus remote roles open to India. Remote jobs limited to the US, UK, Europe etc. are dropped. |
+| **Matching** | Weighted, configurable score from required/preferred skills, content similarity (TF-IDF or embeddings), experience, title alignment, education and location — every component explained. Title matching understands common variants (Full-Stack/Fullstack, Backend/Back End, LLM/AI/GenAI Engineer). Missing profile data is shown as *unknown*, never as a gap. |
 | **Resume Studio** | Per-job tailored resume: relevant skills first, bullets reordered, best projects selected, optional AI rephrasing with fact-checking. ATS-friendly DOCX + PDF, 4 templates, version history, side-by-side comparison with your original. |
 | **Cover letters** | Concise letters from verified facts (template or AI + fact-check), editable, exportable. |
 | **Applications** | Form fields are inspected and mapped to your verified data; unknown screening questions stop the process and ask you. **Review**, **Assisted** (pre-fill, you submit) or **Authorized automation** modes. Never bypasses CAPTCHA/MFA/logins, never applies twice. |
@@ -40,7 +41,7 @@ Your data stays on your server. You bring your own AI provider (or none at all).
 
 | Integration | Status |
 |---|---|
-| Built-in company directory (105 verified companies on Greenhouse/Lever/Ashby, ~11k+ open jobs) | ✅ Searched automatically, no links needed |
+| Built-in company directory (105 verified companies on Greenhouse/Lever/Ashby, incl. many hiring in India — Paytm, Meesho, CRED, Groww, Sarvam AI, Databricks, Stripe…; ~11k+ open jobs) | ✅ Searched automatically, no links needed |
 | Adzuna (aggregates thousands of job sites; free API key) | ✅ Search by your roles + locations |
 | Job-alert emails: LinkedIn, Naukri, Wellfound, Instahyre, Indeed, Foundit, Glassdoor | ✅ Imported automatically from your inbox (read-only IMAP) |
 | Find the same job on the company's own careers board | ✅ Full description + apply directly with the employer |
@@ -50,8 +51,9 @@ Your data stays on your server. You bring your own AI provider (or none at all).
 | Logging into LinkedIn/Naukri/etc. to search or "Easy Apply" | ❌ Not done — their terms forbid bots and accounts get banned. Their jobs arrive via alert emails instead. |
 | Automated *submission* to real employers | ❌ Deliberately not supported — JobPilot pre-fills, you submit. See [docs/INTEGRATIONS.md](docs/INTEGRATIONS.md). |
 
-AI providers: any **OpenAI-compatible** endpoint (OpenAI, NVIDIA NIM / Nemotron, OpenRouter, Ollama,
-vLLM, LM Studio…) and **Anthropic Claude**. Everything also works with **no AI provider** configured.
+AI providers: any **OpenAI-compatible** endpoint (Groq, Google Gemini, OpenAI, NVIDIA NIM / Nemotron,
+OpenRouter, Ollama, vLLM, LM Studio…) and **Anthropic Claude**. Groq and Gemini offer free keys without a
+card. Everything also works with **no AI provider** configured; an AI provider makes tailoring much better.
 
 ---
 
@@ -61,7 +63,7 @@ Requirements: Docker with Compose v2 (Docker Desktop, or Docker Engine on Linux)
 no Python, Node, PostgreSQL, Redis or browsers on your machine.
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/jobpilot-ai.git
+git clone https://github.com/prakkhar19/jobpilot-ai.git
 cd jobpilot-ai
 cp .env.example .env          # or: make init-env   (generates random secrets)
 docker compose up --build -d
@@ -83,12 +85,23 @@ workflow, including automated submission, without contacting any real employer.
 
 | Provider | Base URL | Model |
 |---|---|---|
+| Groq (free key, no card) | `https://api.groq.com/openai/v1` | e.g. `openai/gpt-oss-120b` |
+| Google Gemini (free key, no card) | `https://generativelanguage.googleapis.com/v1beta/openai` | e.g. `gemini-2.5-flash` |
 | OpenAI | `https://api.openai.com/v1` | e.g. `gpt-4o-mini` |
 | NVIDIA NIM (Nemotron) | `https://integrate.api.nvidia.com/v1` | e.g. `nvidia/llama-3.3-nemotron-super-49b-v1` |
 | Ollama on your machine | `http://host.docker.internal:11434/v1` | e.g. `llama3.1` |
 | Anthropic | *(leave empty)* | `claude-opus-5-5` |
 
 Keys are encrypted at rest and never sent to the browser. Use **Test** to verify connectivity.
+Free model names change often — check the provider's current model list if **Test** fails.
+
+### Get jobs from LinkedIn, Naukri, Wellfound, Instahyre
+
+1. Turn on **email job alerts** on those sites for your roles.
+2. In Gmail, create an **App Password** (Google Account → Security → 2-Step Verification → App passwords).
+3. *Integrations → Add source → Job-alert emails*: IMAP server `imap.gmail.com`, your address, the App Password.
+
+JobPilot reads only alert emails from those senders, read-only — nothing is marked read, moved or deleted.
 
 ### Everyday commands
 
@@ -103,12 +116,37 @@ make reset-password EMAIL=you@example.com   # prints a reset link (when SMTP isn
 
 ---
 
-## Remote access
+## Use it from your phone or share it with friends
 
-Docker on a laptop is **not** reachable from the internet, and it shouldn't be over plain HTTP.
-To use JobPilot from anywhere, run it on a VPS/server behind an HTTPS reverse proxy (e.g. Caddy) and
-set `COOKIE_SECURE=true`, `PUBLIC_BASE_URL=https://your-domain`. PostgreSQL, Redis and the browser
-automation are never exposed. Step-by-step: [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
+By default JobPilot listens only on `localhost`. Two ways to reach it from anywhere over HTTPS:
+
+**1. From your own computer — free, no card ([Tailscale Funnel](https://tailscale.com/kb/1223/funnel))**
+
+1. Install Tailscale (`brew install --cask tailscale-app` on macOS), open it and log in.
+2. In the Tailscale admin console enable **HTTPS** (DNS page).
+3. Run `./scripts/go-public.sh` and approve Funnel if asked. It prints your public URL
+   (`https://<machine>.<tailnet>.ts.net`), switches on secure cookies and multi-user mode.
+
+Each friend signs up with their own account; tenant isolation keeps everyone's data private. When
+everyone has joined, set `ALLOW_REGISTRATION=false` in `.env` and run `docker compose up -d`.
+Stop sharing with `./scripts/go-public.sh off`. The link only works while the computer is on and awake.
+
+**2. On a server (always on)**
+
+Any Ubuntu VPS with 4 GB RAM works (e.g. a student cloud credit, or a low-cost VPS paid by UPI/card):
+
+```bash
+./scripts/deploy-to-server.sh ubuntu@<server-ip> [path/to/ssh-key]
+```
+
+This copies the project (never your `.env`, data or backups), installs Docker and Tailscale, creates a
+fresh `.env` with random secrets and starts the stack with daily backups. Alternatively put it behind
+an HTTPS reverse proxy (e.g. Caddy) with `COOKIE_SECURE=true` and `PUBLIC_BASE_URL=https://your-domain`.
+PostgreSQL, Redis and the browser automation are never exposed. Details: [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
+
+**Password reset emails** need SMTP (`SMTP_HOST`, `SMTP_USERNAME`, `SMTP_PASSWORD`, `SMTP_FROM` — a Gmail App Password
+works with `smtp.gmail.com:587`). Without SMTP, an admin can run `make reset-password EMAIL=…` to get a
+one-hour reset link.
 
 ## Documentation
 
