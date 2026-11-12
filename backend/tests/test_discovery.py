@@ -165,8 +165,8 @@ def test_discovery_dedupes_and_expires(client, monkeypatch):
         def normalize_job(self, raw, identifier):  # noqa: ANN001
             return raw
 
-    monkeypatch.setattr(discovery, "get_adapter", lambda kind: Fake())
-    monkeypatch.setattr("app.api.jobs.get_adapter", lambda kind: Fake())
+    monkeypatch.setattr(discovery, "get_adapter", lambda kind, credentials=None: Fake())
+    monkeypatch.setattr("app.api.jobs.get_adapter", lambda kind, credentials=None: Fake())
     for ident in ("a", "b"):
         assert client.post("/api/sources", json={"kind": "greenhouse" if ident == "a" else "lever",
                                                  "identifier": ident}).status_code == 201

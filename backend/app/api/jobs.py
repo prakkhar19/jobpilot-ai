@@ -1,12 +1,13 @@
 from __future__ import annotations
 
+import json
 import uuid
 from typing import Literal
 
 from fastapi import APIRouter, Query, Response
 from sqlalchemy import and_, func, or_, select
 
-from app.adapters.job_sources import SourceError, get_adapter
+from app.adapters.job_sources import ADAPTERS, SourceError, get_adapter
 from app.agents.runner import enqueue_run
 from app.api.deps import DB, CurrentUser, get_owned_or_404
 from app.core.config import get_settings
@@ -26,6 +27,7 @@ from app.schemas.jobs import (
     SourceOut,
     SourceUpdate,
 )
+from app.security.crypto import encrypt
 from app.services import discovery
 from app.services.audit import audit
 from app.services.match_service import ai_match_summary, get_prefs, match_jobs
@@ -43,33 +45,50 @@ def sources_catalog() -> dict:
     return cat
 
 
+def _source_out(src: JobSource) -> SourceOut:
+    out = SourceOut.model_validate(src)
+    out.has_credentials = bool(src.credentials_encrypted)
+    return out
+
+
+def _clean_credentials(kind: str, creds: dict[str, str] | None) -> dict[str, str]:
+    allowed = {f["key"] for f in ADAPTERS[kind].credential_fields}
+    return {k: str(v).strip()[:500] for k, v in (creds or {}).items() if k in allowed and str(v).strip()}
+
+
 @router.get("/sources", response_model=list[SourceOut])
 def list_sources(db: DB, user: CurrentUser) -> list[SourceOut]:
     rows = db.scalars(select(JobSource).where(JobSource.user_id == user.id).order_by(JobSource.created_at)).all()
-    return [SourceOut.model_validate(r) for r in rows]
+    return [_source_out(r) for r in rows]
 
 
 @router.post("/sources", response_model=SourceOut, status_code=201)
 def create_source(body: SourceIn, db: DB, user: CurrentUser) -> SourceOut:
     if body.kind == "demo" and not get_settings().demo_mode:
         raise DomainError("The demo board is disabled on this installation.")
-    adapter = get_adapter(body.kind)
+    creds = _clean_credentials(body.kind, body.credentials)
+    missing = [f["label"] for f in ADAPTERS[body.kind].credential_fields if f["key"] not in creds]
+    if missing:
+        raise DomainError(f"Missing: {', '.join(missing)}.")
+    ident = body.identifier.strip() or ADAPTERS[body.kind].identifier_default
+    if not ident:
+        raise DomainError("Enter an identifier for this source.")
     try:
-        check = adapter.validate_source_access(body.identifier)
+        check = get_adapter(body.kind, creds).validate_source_access(ident)
     except SourceError as exc:
         raise DomainError(str(exc)) from exc
     if not check.ok:
         raise DomainError(check.message)
-    ident = body.identifier.strip()
     if db.scalar(select(JobSource.id).where(JobSource.user_id == user.id, JobSource.kind == body.kind,
                                             JobSource.identifier == ident)):
         raise DomainError("This source is already configured.", status_code=409)
     src = JobSource(user_id=user.id, kind=body.kind, identifier=ident,
-                    display_name=body.display_name or check.display_name or ident, enabled=body.enabled)
+                    display_name=body.display_name or check.display_name or ident, enabled=body.enabled,
+                    credentials_encrypted=encrypt(json.dumps(creds)) if creds else "")
     db.add(src)
     audit(db, user.id, "source.created", target_type="job_source", target_id=src.id, data={"kind": body.kind})
     db.commit()
-    return SourceOut.model_validate(src)
+    return _source_out(src)
 
 
 @router.patch("/sources/{source_id}", response_model=SourceOut)
@@ -79,8 +98,15 @@ def update_source(source_id: uuid.UUID, body: SourceUpdate, db: DB, user: Curren
         src.display_name = body.display_name
     if body.enabled is not None:
         src.enabled = body.enabled
+    if body.credentials is not None:
+        creds = discovery.source_credentials(src) | _clean_credentials(src.kind, body.credentials)
+        check = get_adapter(src.kind, creds).validate_source_access(src.identifier)
+        if not check.ok:
+            raise DomainError(check.message)
+        src.credentials_encrypted = encrypt(json.dumps(creds)) if creds else ""
+        src.last_status, src.last_error = "never", ""
     db.commit()
-    return SourceOut.model_validate(src)
+    return _source_out(src)
 
 
 @router.delete("/sources/{source_id}", status_code=204)
@@ -95,7 +121,7 @@ def delete_source(source_id: uuid.UUID, db: DB, user: CurrentUser) -> Response:
 def test_source(source_id: uuid.UUID, db: DB, user: CurrentUser) -> dict:
     src = get_owned_or_404(db, JobSource, source_id, user, "Source")
     try:
-        check = get_adapter(src.kind).validate_source_access(src.identifier)
+        check = get_adapter(src.kind, discovery.source_credentials(src)).validate_source_access(src.identifier)
     except SourceError as exc:
         return {"ok": False, "message": str(exc)}
     return {"ok": check.ok, "message": check.message, "job_count": check.job_count}
@@ -235,6 +261,23 @@ def match_job(job_id: uuid.UUID, db: DB, user: CurrentUser) -> JobDetail:
 def job_ai_summary(job_id: uuid.UUID, db: DB, user: CurrentUser) -> dict:
     job = get_owned_or_404(db, Job, job_id, user, "Job")
     return {"summary": ai_match_summary(db, user, job)}
+
+
+@router.post("/jobs/{job_id}/find-official", response_model=JobDetail)
+def find_official(job_id: uuid.UUID, db: DB, user: CurrentUser) -> JobDetail:
+    """Look for the same job on the company's own careers board (Greenhouse/Lever/Ashby)."""
+    from app.services.company_resolver import resolve_job
+
+    job = get_owned_or_404(db, Job, job_id, user, "Job")
+    found = resolve_job(db, job)
+    db.commit()
+    if found:
+        _try_match(db, user, job)
+    detail = _detail(db, user, job)
+    if not found:
+        raise DomainError("No matching posting was found on this company's own careers board. Apply via the "
+                          "original link.", status_code=404)
+    return detail
 
 
 @router.post("/jobs/{job_id}/verify", response_model=JobDetail)

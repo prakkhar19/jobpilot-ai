@@ -59,13 +59,16 @@ def inspect_application_task(self, application_id: str) -> str:  # noqa: ANN001
 def agent_tick() -> dict:
     from app.agents.runner import tick
 
+    # Beat dispatched this task (scheduler alive) and a worker executed it (worker alive).
     _beat("scheduler", {"last_tick": datetime.now(UTC).isoformat()})
+    _beat("worker", {"last_task": "agent_tick"})
     return tick()
 
 
 @celery_app.task(name="jobpilot.scheduler_heartbeat")
 def scheduler_heartbeat() -> None:
     _beat("scheduler")
+    _beat("worker", {"last_task": "heartbeat"})
 
 
 @celery_app.task(name="jobpilot.ping")

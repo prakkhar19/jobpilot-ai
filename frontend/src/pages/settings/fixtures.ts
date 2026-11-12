@@ -2,7 +2,7 @@ import type { AgentConfig } from '@/types/api'
 
 export const agentConfig: AgentConfig = {
   enabled: false,
-  frequency_hours: 24,
+  frequency_minutes: 30, alert_on_new_matches: true, email_alerts: false,
   run_days: [0, 1, 2, 3, 4],
   window_start_hour: 8,
   window_end_hour: 20,

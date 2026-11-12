@@ -227,13 +227,30 @@ export interface AIProviderCatalogEntry {
 export type AIProviderCatalog = Record<string, AIProviderCatalogEntry>
 
 // ---------------------------------------------------------------- sources & jobs
-export type SourceKind = 'greenhouse' | 'lever' | 'ashby' | 'career_page' | 'demo'
+export type SourceKind =
+  | 'directory'
+  | 'adzuna'
+  | 'email_alerts'
+  | 'remotive'
+  | 'arbeitnow'
+  | 'greenhouse'
+  | 'lever'
+  | 'ashby'
+  | 'career_page'
+  | 'demo'
+
+export interface CredentialField {
+  key: string
+  label: string
+  secret: boolean
+}
 
 export interface SourceInput {
   kind: SourceKind
   identifier: string
   display_name?: string
   enabled?: boolean
+  credentials?: Record<string, string>
 }
 
 export interface JobSource {
@@ -247,10 +264,20 @@ export interface JobSource {
   last_error: string
   jobs_found: number
   created_at: ISODate
+  has_credentials?: boolean
 }
 
 export interface SourceCatalog {
-  supported: { kind: SourceKind; label: string; description: string; identifier_help: string }[]
+  supported: {
+    kind: SourceKind
+    label: string
+    description: string
+    identifier_help: string
+    identifier_default?: string
+    credential_fields?: CredentialField[]
+    min_interval_minutes?: number
+    attribution?: string
+  }[]
   unsupported: { platform: string; reason: string }[]
 }
 
@@ -287,6 +314,9 @@ export interface Job {
   is_demo: boolean
   hidden: boolean
   duplicate_of_id: string | null
+  official_url?: string
+  official_source?: string
+  official_checked_at?: ISODate | null
   match_score?: number | null
   recommendation?: Recommendation | string | null
   saved?: boolean
@@ -632,7 +662,9 @@ export type ExperienceLevel = 'intern' | 'junior' | 'mid' | 'senior' | 'lead' | 
 
 export interface AgentConfigInput {
   enabled: boolean
-  frequency_hours: number
+  frequency_minutes: number
+  alert_on_new_matches: boolean
+  email_alerts: boolean
   run_days: number[]
   window_start_hour: number
   window_end_hour: number

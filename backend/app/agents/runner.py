@@ -209,7 +209,8 @@ def run_pipeline(task_id: str, *, step_hook: Callable[[str], None] | None = None
                 dstats = None
             else:
                 source_ids = [uuid.UUID(s) for s in stats["source_ids"]] or None
-                dstats = discovery.discover(db, user, cfg, source_ids=source_ids, limit=remaining)
+                dstats = discovery.discover(db, user, cfg, source_ids=source_ids, limit=remaining,
+                                            respect_interval=task.trigger == "schedule")
                 stats["discovery"] = dstats.as_dict()
                 ctx.info(f"Found {dstats.new} new job(s) from {dstats.sources_checked} source(s); "
                          f"{dstats.filtered_out} filtered out, {dstats.duplicates} duplicate(s), "
@@ -219,8 +220,14 @@ def run_pipeline(task_id: str, *, step_hook: Callable[[str], None] | None = None
             if step_hook:
                 step_hook("DISCOVERING")
 
-            # 2. Analysis
-            ctx.state("ANALYZING", "Extracting requirements from job descriptions.")
+            # 2. Find official company postings for jobs from alerts/aggregators, then analyse.
+            ctx.state("ANALYZING", "Finding official company postings and extracting requirements.")
+            from app.services.company_resolver import resolve_pending
+
+            found = resolve_pending(db, user.id, limit=25)
+            stats["official_postings_found"] = found
+            if found:
+                ctx.info(f"Found the official company posting for {found} job(s) — apply directly with the employer.")
             from app.services.jd_analysis import analyze_job
 
             pending = db.scalars(select(Job).where(Job.user_id == user.id, Job.analyzed_at.is_(None),
@@ -251,6 +258,8 @@ def run_pipeline(task_id: str, *, step_hook: Callable[[str], None] | None = None
                                key=lambda m: -m.overall_score)
             stats["matched"] = len(matches)
             stats["qualified"] = len(qualified)
+            if cfg.alert_on_new_matches and dstats is not None and dstats.new_job_ids:
+                stats["alerts_sent"] = send_new_match_alerts(db, user, cfg, dstats.new_job_ids, qualified)
             ctx.info(f"Scored {len(matches)} job(s); {len(qualified)} meet your minimum score of {cfg.min_match_score:g}.")
 
             # 4. Document generation (bounded by the daily preparation limit)
@@ -357,6 +366,32 @@ def run_pipeline(task_id: str, *, step_hook: Callable[[str], None] | None = None
         db.close()
 
 
+def send_new_match_alerts(db: Session, user: User, cfg: AgentConfiguration, new_job_ids: list[str],
+                          qualified: list[JobMatch]) -> int:
+    """Instant alerts for newly discovered jobs that pass the user's threshold (freshest first)."""
+    from app.services.audit import notify
+    from app.services.mailer import send_email, smtp_configured
+
+    new_ids = {uuid.UUID(j) for j in new_job_ids}
+    fresh = [m for m in qualified if m.job_id in new_ids and m.recommendation in ("strong_match", "good_match")]
+    if not fresh:
+        return 0
+    jobs = {m.job_id: db.get(Job, m.job_id) for m in fresh}
+    fresh.sort(key=lambda m: (-(m.overall_score or 0)))
+    lines = []
+    for m in fresh[:10]:
+        j = jobs[m.job_id]
+        notify(db, user.id, f"New match {m.overall_score:.0f}: {j.title} at {j.company}",
+               f"{j.location or 'Location not stated'} — apply early for the best chance.", kind="match",
+               link=f"/jobs/{j.id}")
+        lines.append(f"- {m.overall_score:.0f}/100  {j.title} at {j.company} ({j.location}) — {j.posting_url}")
+    if cfg.email_alerts and smtp_configured():
+        base = get_settings().public_base_url.rstrip("/")
+        send_email(user.email, f"JobPilot: {len(fresh)} new matching job(s)",
+                   "New jobs matching your profile:\n\n" + "\n".join(lines) + f"\n\nReview them: {base}/jobs/recommended\n")
+    return len(fresh[:10])
+
+
 # ------------------------------------------------------------------------------------------- scheduler
 
 def is_due(cfg: AgentConfiguration, now: datetime) -> bool:
@@ -402,7 +437,7 @@ def tick(now: datetime | None = None) -> dict:
             user = db.get(User, cfg.user_id)
             if user is None or not user.is_active:
                 continue
-            cfg.next_run_at = now + timedelta(hours=max(1, cfg.frequency_hours))
+            cfg.next_run_at = now + timedelta(minutes=max(15, cfg.frequency_minutes))
             db.commit()
             try:
                 enqueue_run(db, user, trigger="schedule")

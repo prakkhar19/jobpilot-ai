@@ -40,10 +40,14 @@ class AgentConfiguration(UUIDPk, TenantOwned, TimestampMixin, Base):
 
     enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     paused: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
-    frequency_hours: Mapped[int] = mapped_column(Integer, default=24, nullable=False)
-    run_days: Mapped[list] = mapped_column(JSON, default=lambda: [0, 1, 2, 3, 4], nullable=False)  # 0=Mon
-    window_start_hour: Mapped[int] = mapped_column(Integer, default=8, nullable=False)
-    window_end_hour: Mapped[int] = mapped_column(Integer, default=20, nullable=False)
+    frequency_hours: Mapped[int] = mapped_column(Integer, default=24, nullable=False)  # legacy, unused
+    frequency_minutes: Mapped[int] = mapped_column(Integer, default=30, nullable=False)
+    alert_on_new_matches: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    email_alerts: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    run_days: Mapped[list] = mapped_column(JSON, default=lambda: [0, 1, 2, 3, 4, 5, 6], nullable=False)  # 0=Mon
+    # start == end means "all day" (the agent searches around the clock).
+    window_start_hour: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    window_end_hour: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     timezone: Mapped[str] = mapped_column(String(60), default="UTC", nullable=False)
 
     target_roles: Mapped[list] = mapped_column(JSON, default=list, nullable=False)

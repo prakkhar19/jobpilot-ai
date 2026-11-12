@@ -9,10 +9,12 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 class AgentConfigIn(BaseModel):
     enabled: bool = False
-    frequency_hours: int = Field(default=24, ge=1, le=168)
-    run_days: list[int] = Field(default_factory=lambda: [0, 1, 2, 3, 4])
-    window_start_hour: int = Field(default=8, ge=0, le=23)
-    window_end_hour: int = Field(default=20, ge=0, le=23)
+    frequency_minutes: int = Field(default=30, ge=15, le=10080)
+    alert_on_new_matches: bool = True
+    email_alerts: bool = False
+    run_days: list[int] = Field(default_factory=lambda: [0, 1, 2, 3, 4, 5, 6])
+    window_start_hour: int = Field(default=0, ge=0, le=23)
+    window_end_hour: int = Field(default=0, ge=0, le=23)
     timezone: str = Field(default="UTC", max_length=60)
     target_roles: list[str] = Field(default_factory=list, max_length=30)
     keywords: list[str] = Field(default_factory=list, max_length=50)

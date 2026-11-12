@@ -2,6 +2,27 @@
 
 ## Job sources
 
+**Search-everywhere sources (no company links needed):**
+
+| Kind | Setup | Notes |
+|---|---|---|
+| `directory` | none | 105 company boards (Greenhouse/Lever/Ashby, incl. companies hiring in India) verified live on 2026-11-10/12, ~11.5k openings; a full scan takes ~3 minutes in the worker. Checked at most every 30 min. |
+| `adzuna` | free App ID + Key from developer.adzuna.com; identifier = country code (`in`, `gb`, `us`…) | Searches each target role × up to 3 locations, newest first, 50 results each. Gives description *snippets*. Terms allow personal job-search use; listings credited to Adzuna. India support not confirmed in Adzuna's docs — the Test button tells you. |
+| `email_alerts` | IMAP server, email, **app password** (Gmail: Google Account → Security → App passwords) | Reads job-alert emails from LinkedIn, Naukri, Wellfound, Instahyre, Indeed, Foundit, Glassdoor from the last 3 days. Read-only (`BODY.PEEK`, mailbox opened read-only); only messages from those senders are opened; their websites are never fetched. Checked every 15 min. |
+| `remotive` | none | Remote jobs. Remotive asks for max 4 requests/day → checked at most every 6 h (also for manual runs). Listings are delayed 24 h by Remotive and credited to it. |
+| `arbeitnow` | none | Newest ~600 jobs, mostly Germany/Europe; checked at most hourly. |
+
+**Official company postings.** For jobs from alert emails and aggregators, the agent (and the *Find on company site*
+button) looks for the company's own Greenhouse/Lever/Ashby board and the same role on it (title similarity, location
+check). When found, the job gets the full official description (better matching) and the employer's own application
+URL, so you apply directly with the company — and Greenhouse/Lever forms can be pre-filled.
+
+**Schedule.** The agent runs every `frequency_minutes` (default 30, minimum 15), around the clock by default. Each
+source has its own minimum interval (above) so providers' usage rules are respected. New jobs that pass your minimum
+score trigger an instant in-app notification (and email, if SMTP is configured and enabled).
+
+**Other sources:**
+
 | Kind | Identifier | How it works | Status checks |
 |---|---|---|---|
 | `greenhouse` | board token (`acme` from `boards.greenhouse.io/acme`) or URL | Public Job Board API `boards-api.greenhouse.io/v1/boards/{token}/jobs?content=true` | Job endpoint 404 → expired; jobs missing from the full listing are marked expired |

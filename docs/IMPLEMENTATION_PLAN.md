@@ -1,66 +1,57 @@
 # JobPilot AI — Implementation Plan & Checklist
 
-This file is the living checklist. Each phase is verified (tests run, failures fixed) before moving on.
-Status legend: `[x]` done and verified · `[~]` partially done (see notes) · `[ ]` not started.
+Status legend: `[x]` implemented and verified by tests/run · `[~]` partial (see note) · `[ ]` not done.
+Last verified: 2026-11-10 — backend 89 pytest (SQLite + PostgreSQL), frontend 80 Vitest, Docker stack E2E
+(API workflow through nginx, browser UI tests, restart persistence).
 
-## Key engineering decisions
+## Phase 1 — Repository foundation
+- [x] Monorepo skeleton, `.gitignore`, `.dockerignore`, `.env.example`, `Makefile`, MIT license
+- [x] Architecture + plan docs
 
-| Decision | Choice | Why |
-|---|---|---|
-| Shape | Modular monolith (FastAPI) + Celery worker + Celery beat | One codebase, independent background processing, no microservice overhead |
-| DB | PostgreSQL 16, SQLAlchemy 2.0, Alembic | Portable types (`Uuid`, `JSON`) so the unit suite also runs on SQLite |
-| Auth | Server-side sessions (hashed token in DB) in an `HttpOnly` cookie + double-submit CSRF token | Revocable sessions, no JWT secrets in the browser |
-| Passwords | Argon2id (`argon2-cffi`) | Current OWASP recommendation |
-| Secrets at rest | Fernet (AES-128-CBC + HMAC) keyed from the app secret | API keys never stored or returned in plaintext |
-| Tenant isolation | `user_id` on every owned row + service-layer scoping + a SQLAlchemy `do_orm_execute` hook that injects `user_id = :tenant` criteria on every ORM query when a tenant is bound | Defence in depth: forgetting a filter cannot leak rows |
-| LLM | Provider-neutral interface; OpenAI-compatible (OpenAI, NVIDIA NIM/Nemotron, Ollama, vLLM, LM Studio…) + Anthropic Messages API | Users bring their own key/model |
-| Works without an LLM | Rule-based resume parser, TF-IDF similarity, deterministic tailoring/cover letters | Core features never depend on a paid API; LLM output is an enhancement and is fact-checked |
-| Factual safety | Every LLM rewrite is validated against the verified profile (skills, numbers, organisations); violations are reverted and logged | "Never fabricate" enforced in code, not just in prompts |
-| Job sources | Greenhouse / Lever / Ashby public JSON APIs, schema.org `JobPosting` on career pages, manual URL/text import | Only sources with public, permitted access are automated |
-| Applications | Provider adapters; sandbox "mock portal" for end-to-end verification; Greenhouse/Lever assisted fill (stops at CAPTCHA, never bypasses) | Human approval is the default |
-| Docs | python-docx (DOCX) and ReportLab (PDF), single-column ATS-safe templates | No external binaries needed |
-| Frontend | React + TS + Vite + Tailwind, TanStack Query, Radix primitives, served by nginx which proxies `/api` | Same-origin cookies, nothing secret in the bundle |
+## Phase 2 — Backend foundation
+- [x] Config, structured JSON logging with secret redaction, DB session, ORM tenant-isolation hook
+- [x] 28 tables, Alembic migration (`alembic check` clean on PostgreSQL and SQLite)
+- [x] Auth: register/login/logout, server sessions, CSRF, password reset (email or CLI), roles, lockout, account deletion
+- [x] Rate limiting (Redis, in-process fallback), security headers
 
-## Phases
+## Phase 3 — Candidate onboarding
+- [x] Upload validation (size, extension, magic bytes, DOCX structure, zip bomb, safe names, traversal guard)
+- [x] PDF/DOCX extraction, rule-based parser, optional LLM extraction with grounding (hallucinations discarded)
+- [x] Profile CRUD, versions, approval, activation, duplication; immutable originals (SHA-256)
 
-### Phase 1 — Repository foundation
-- [ ] Repo skeleton, `.gitignore`, `.dockerignore`, `.env.example`, `Makefile`, license
-- [ ] Architecture + plan docs
+## Phase 4 — AI intelligence
+- [x] LLM abstraction: OpenAI-compatible (httpx) + Anthropic (official SDK), retries, fallback provider, usage + cost
+- [x] JD requirement extraction with a ~160-entry skill taxonomy
+- [x] Explainable weighted matching, configurable weights, unknown ≠ missing, TF-IDF or embeddings
+- [x] Resume tailoring + fact checker + DOCX/PDF, 4 templates, change log, compare, user edits as new versions
+- [x] Cover letters (deterministic or LLM; unverified sentences removed), edit, export PDF/DOCX/TXT
 
-### Phase 2 — Backend foundation
-- [ ] Config, logging (structured JSON, secret redaction), DB session, tenant hook
-- [ ] All models + Alembic migration
-- [ ] Auth: register/login/logout/sessions/CSRF/password reset/roles/account deletion
-- [ ] Rate limiting, security headers
+## Phase 5 — Job discovery
+- [x] Adapters: Greenhouse, Lever (incl. EU), Ashby, career pages (JSON-LD, robots.txt), demo sandbox, manual import
+- [x] Filters, normalisation, cross-source dedup, expiry detection, re-verification task, SSRF-safe fetching, per-host throttling
+- [x] Unsupported platforms listed explicitly (LinkedIn, Indeed, Naukri, Wellfound, Instahyre, Foundit, Glassdoor)
 
-### Phase 3 — Candidate onboarding
-- [ ] Upload validation (size, extension, magic bytes, safe names)
-- [ ] PDF/DOCX text extraction, rule-based parser, optional LLM extraction with grounding check
-- [ ] Profile CRUD, versions, approval
+## Phase 6 — Frontend
+- [x] Auth pages, onboarding wizard, all 14 pages + admin, light/dark, responsive drawer, toasts/dialogs/empty/error states
 
-### Phase 4 — AI intelligence
-- [ ] LLM abstraction (OpenAI-compatible, Anthropic), retries, usage tracking, fallback
-- [ ] JD requirement extraction + skill taxonomy
-- [ ] Explainable weighted matching (configurable weights, unknown ≠ missing)
-- [ ] Resume tailoring + fact checker + DOCX/PDF rendering, templates, change log
-- [ ] Cover letters (LLM or deterministic), edit/regenerate/export
+## Phase 7 — Application automation
+- [x] Provider interface; sandbox portal (inspect/fill/submit/verify); Greenhouse/Lever inspection + assisted fill
+- [x] Review / Assisted / Authorized modes, needs-input stop, answer bank, idempotency, threshold gate, CAPTCHA stop, audit trail
+- [~] Automated submission to real employers intentionally not implemented (see docs/LIMITATIONS.md)
 
-### Phase 5 — Job discovery
-- [ ] Adapter interface; Greenhouse, Lever, Ashby, career page (JSON-LD), manual import
-- [ ] Filters, normalisation, dedup, status re-verification, SSRF-safe fetching, robots.txt, per-host rate limits
+## Phase 8 — Background agents
+- [x] Celery worker + beat, lifecycle states, Redis locks, daily limits, pause/resume/cancel, logs, stale-run recovery, heartbeats
 
-### Phase 6 — Frontend
-- [ ] Auth, onboarding wizard, all 14 pages, light/dark, responsive, toasts/dialogs/empty/error states
+## Phase 9 — Hardening
+- [x] SSRF, prompt-injection, upload, authorization, tenant-leak, secret-leak, header-injection tests
+- [x] Export, account deletion, backup/restore scripts, diagnostics page, log retention
+- [x] Race-safe secret generation across processes (found by fresh-volume Docker test)
 
-### Phase 7 — Application automation
-- [ ] Provider interface; mock portal provider (full submit); Greenhouse/Lever assisted fill
-- [ ] Review / Assisted / Authorized modes, missing-info stop, idempotency, audit trail
-
-### Phase 8 — Background agents
-- [ ] Celery worker + beat, agent lifecycle, locks, retries, pause/resume/cancel, logs, limits
-
-### Phase 9 — Hardening
-- [ ] SSRF/prompt-injection/upload/authz/tenant tests, export/deletion, backup/restore scripts, diagnostics
-
-### Phase 10 — Release
-- [ ] Docker clean build + restart persistence, CI workflows, docs set, screenshots
+## Phase 10 — Release
+- [x] Docker clean build, all services healthy, non-root, only 127.0.0.1:8080 published
+- [x] Restart persistence verified
+- [x] CI workflows (lint, tests on PostgreSQL, frontend, Docker E2E, persistence, dependency/secret checks), multi-arch build workflow
+- [x] Docs set, issue/PR templates, synthetic demo seed + screenshots
+- [ ] CI has not yet run on GitHub (repository not pushed)
+- [ ] Multi-arch (amd64) image build not verified locally — only arm64 was built on this machine
+- [x] Backup → restore round trip verified (data deleted after backup was recovered)

@@ -6,17 +6,22 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, HttpUrl
 
+SourceKind = Literal["directory", "adzuna", "remotive", "arbeitnow", "email_alerts", "greenhouse", "lever", "ashby",
+                     "career_page", "demo"]
+
 
 class SourceIn(BaseModel):
-    kind: Literal["greenhouse", "lever", "ashby", "career_page", "demo"]
-    identifier: str = Field(min_length=1, max_length=500)
+    kind: SourceKind
+    identifier: str = Field(default="", max_length=500, description="Defaults to the source's standard identifier")
     display_name: str = Field(default="", max_length=200)
     enabled: bool = True
+    credentials: dict[str, str] | None = Field(default=None, description="API keys / login for sources that need them")
 
 
 class SourceUpdate(BaseModel):
     display_name: str | None = Field(default=None, max_length=200)
     enabled: bool | None = None
+    credentials: dict[str, str] | None = None
 
 
 class SourceOut(BaseModel):
@@ -31,6 +36,7 @@ class SourceOut(BaseModel):
     last_error: str
     jobs_found: int
     created_at: datetime
+    has_credentials: bool = False
 
 
 class RequirementOut(BaseModel):
@@ -82,6 +88,9 @@ class JobOut(BaseModel):
     is_demo: bool
     hidden: bool
     duplicate_of_id: uuid.UUID | None
+    official_url: str = ""
+    official_source: str = ""
+    official_checked_at: datetime | None = None
     match_score: float | None = None
     recommendation: str | None = None
     saved: bool = False

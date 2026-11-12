@@ -21,7 +21,9 @@ from app.adapters.job_sources import (
 )
 from app.adapters.job_sources.base import html_to_text
 from app.core.errors import DomainError
+from app.data.regions import open_to_india
 from app.models import AgentConfiguration, Job, JobSource, User
+from app.security.crypto import decrypt
 from app.services.jd_analysis import analyze_job, detect_seniority
 from app.services.skills import extract_skills, skill_key
 
@@ -51,11 +53,26 @@ def criteria_from_config(cfg: AgentConfiguration | None, limit: int | None = Non
 
 
 _ROLE_STOP = {"engineer", "developer", "and", "the", "of", "senior", "junior", "sr", "jr", "lead", "-"}
+# Spelling variants that should compare equal ("Full-Stack" = "Fullstack" = "Full Stack", "Back End" = "Backend").
+_ROLE_SYNONYMS = [
+    (r"full[\s-]*stack", "fullstack"), (r"back[\s-]*end", "backend"), (r"front[\s-]*end", "frontend"),
+    (r"dev[\s-]*ops", "devops"), (r"gen(?:erative)?[\s-]*ai", "genai"), (r"artificial[\s-]+intelligence", "ai"),
+    (r"machine[\s-]+learning", "ml"), (r"\bai[\s/-]*ml\b", "ai ml"), (r"\bsde\b|software development engineer", "software engineer"),
+]
+# AI roles are named many ways; an "LLM Engineer" search should also find "AI Engineer", "GenAI Engineer"…
+_AI_FAMILY = {"llm", "llms", "ai", "genai", "ml", "nlp"}
+
+
+def _norm_role(text: str) -> str:
+    t = text.lower()
+    for pattern, repl in _ROLE_SYNONYMS:
+        t = re.sub(pattern, repl, t)
+    return t
 
 
 def _role_matches(title: str, role: str) -> bool:
-    t = title.lower()
-    r = role.lower().strip()
+    t = _norm_role(title)
+    r = _norm_role(role).strip()
     if not r:
         return False
     if r in t:
@@ -64,13 +81,11 @@ def _role_matches(title: str, role: str) -> bool:
     toks = [w for w in re.findall(r"[a-z0-9+#.]+", r)]
     core = [w for w in toks if w not in _ROLE_STOP]
     kind = [w for w in toks if w in ("engineer", "developer")]
+    title_toks = set(re.findall(r"[a-z0-9+#.]+", t))
+    has_kind = any(k in t for k in ("engineer", "developer", "scientist")) if kind else True
+    if core and set(core) <= _AI_FAMILY:
+        return has_kind and bool(title_toks & _AI_FAMILY)
     has_core = all(re.search(rf"(?<![a-z]){re.escape(w)}", t) for w in core) if core else True
-    has_kind = any(k in t for k in ("engineer", "developer")) if kind else True
-    # Common synonyms
-    if "ml" in core and "machine learning" in t:
-        has_core = all(w == "ml" or w in t for w in core)
-    if "ai" in core and ("artificial intelligence" in t or " ai" in f" {t}"):
-        has_core = all(w == "ai" or w in t for w in core)
     return has_core and has_kind
 
 
@@ -94,9 +109,17 @@ def filter_reasons(job: NormalizedJob, c: SearchCriteria) -> list[str]:
     if c.locations or c.countries:
         loc_l = job.location.lower()
         wanted = [x.lower() for x in c.locations + c.countries if x.strip()]
-        remote_ok = job.workplace_type == "remote" and (not c.workplace_types or "remote" in c.workplace_types)
-        if loc_l and not remote_ok and not any(w in loc_l for w in wanted):
-            reasons.append(f"location '{job.location}' is not in your preferred locations")
+        remote_wanted = not c.workplace_types or "remote" in c.workplace_types
+        if "india" in [x.lower().strip() for x in c.countries]:
+            # Region mode: anywhere in India (WFO/hybrid), or remote roles open to people in India.
+            verdict = open_to_india(job.location, job.workplace_type, job.description_text)
+            is_remote = job.workplace_type == "remote" or "remote" in loc_l
+            if verdict is False or (is_remote and not remote_wanted):
+                reasons.append(f"location '{job.location}' is not open to candidates in India")
+        else:
+            remote_ok = job.workplace_type == "remote" and remote_wanted
+            if loc_l and not remote_ok and not any(w in loc_l for w in wanted):
+                reasons.append(f"location '{job.location}' is not in your preferred locations")
     if c.employment_types and job.employment_type:
         et = job.employment_type.lower().replace("-", " ")
         if not any(x.lower().replace("-", " ") in et for x in c.employment_types):
@@ -189,21 +212,36 @@ class DiscoveryStats:
     duplicates: int = 0
     filtered_out: int = 0
     expired: int = 0
+    skipped_recent: int = 0
     errors: list[str] = field(default_factory=list)
     new_job_ids: list[str] = field(default_factory=list)
     filter_samples: list[str] = field(default_factory=list)
 
     def as_dict(self) -> dict:
         return {k: getattr(self, k) for k in ("sources_checked", "fetched", "new", "updated", "duplicates",
-                                               "filtered_out", "expired", "errors")} | {"new_jobs": len(self.new_job_ids)}
+                                               "filtered_out", "expired", "skipped_recent", "errors")} | {"new_jobs": len(self.new_job_ids)}
+
+
+def source_credentials(source: JobSource) -> dict[str, str]:
+    if not source.credentials_encrypted:
+        return {}
+    import json
+
+    return json.loads(decrypt(source.credentials_encrypted))
 
 
 def run_source(db: Session, user: User, source: JobSource, criteria: SearchCriteria, stats: DiscoveryStats,
-               remaining: int) -> int:
+               remaining: int, *, respect_interval: bool = True) -> int:
     """Discover from one source. Returns how many new jobs were added."""
-    adapter = get_adapter(source.kind)
-    stats.sources_checked += 1
+    adapter = get_adapter(source.kind, source_credentials(source))
     now = datetime.now(UTC)
+    last = source.last_checked_at
+    if (respect_interval or adapter.strict_interval) and last is not None and source.last_status == "ok":
+        last = last if last.tzinfo else last.replace(tzinfo=UTC)
+        if now - last < timedelta(minutes=adapter.min_interval_minutes):
+            stats.skipped_recent += 1
+            return 0
+    stats.sources_checked += 1
     try:
         jobs = adapter.discover_jobs(source.identifier, criteria)
     except SourceError as exc:
@@ -250,7 +288,7 @@ def run_source(db: Session, user: User, source: JobSource, criteria: SearchCrite
 
 
 def discover(db: Session, user: User, cfg: AgentConfiguration | None, *, source_ids: list | None = None,
-             limit: int | None = None) -> DiscoveryStats:
+             limit: int | None = None, respect_interval: bool = True) -> DiscoveryStats:
     criteria = criteria_from_config(cfg, limit)
     stats = DiscoveryStats()
     q = select(JobSource).where(JobSource.user_id == user.id, JobSource.enabled.is_(True))
@@ -260,7 +298,7 @@ def discover(db: Session, user: User, cfg: AgentConfiguration | None, *, source_
     for source in db.scalars(q).all():
         if remaining <= 0:
             break
-        remaining -= run_source(db, user, source, criteria, stats, remaining)
+        remaining -= run_source(db, user, source, criteria, stats, remaining, respect_interval=respect_interval)
         db.commit()
     return stats
 
@@ -269,7 +307,7 @@ def verify_job(db: Session, user: User, job: Job) -> str:
     if job.source_kind in ("manual",):
         return job.status
     source = db.get(JobSource, job.source_id) if job.source_id else None
-    identifier = source.identifier if source else job.external_id.split(":")[0]
+    identifier = source.identifier if source and source.kind == job.source_kind else job.external_id.split(":")[0]
     try:
         status = get_adapter(job.source_kind).check_job_status(identifier, job.external_id)
     except SourceError:
@@ -341,7 +379,9 @@ def import_manual(db: Session, user: User, *, title: str, company: str, descript
 def source_catalog() -> dict:
     return {
         "supported": [
-            {"kind": k, "label": a.label, "description": a.description, "identifier_help": a.identifier_help}
+            {"kind": k, "label": a.label, "description": a.description, "identifier_help": a.identifier_help,
+             "identifier_default": a.identifier_default, "credential_fields": a.credential_fields,
+             "min_interval_minutes": a.min_interval_minutes, "attribution": a.attribution}
             for k, a in ADAPTERS.items()
         ],
         "unsupported": [{"platform": k, "reason": v} for k, v in UNSUPPORTED_PLATFORMS.items()],

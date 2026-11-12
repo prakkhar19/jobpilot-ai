@@ -35,6 +35,7 @@ class JobSource(UUIDPk, TenantOwned, TimestampMixin, Base):
     last_status: Mapped[str] = mapped_column(String(30), default="never", nullable=False)  # ok|error|never
     last_error: Mapped[str] = mapped_column(Text, default="", nullable=False)
     jobs_found: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    credentials_encrypted: Mapped[str] = mapped_column(Text, default="", nullable=False)
 
 
 class Job(UUIDPk, TenantOwned, Base):
@@ -70,6 +71,10 @@ class Job(UUIDPk, TenantOwned, Base):
     duplicate_of_id: Mapped[uuid.UUID | None] = mapped_column(Uuid, ForeignKey("jobs.id", ondelete="SET NULL"))
     analyzed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     is_demo: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    # Official company posting found for jobs discovered via alerts/aggregators (see company_resolver).
+    official_url: Mapped[str] = mapped_column(String(1000), default="", nullable=False)
+    official_source: Mapped[str] = mapped_column(String(300), default="", nullable=False)
+    official_checked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     hidden: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
     requirements: Mapped[list[JobRequirement]] = relationship(cascade="all, delete-orphan", lazy="selectin")

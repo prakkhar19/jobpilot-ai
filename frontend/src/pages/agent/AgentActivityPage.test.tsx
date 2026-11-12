@@ -5,7 +5,7 @@ import { callsTo, mockFetch, renderWithProviders } from '@/test/utils'
 import AgentActivityPage from './AgentActivityPage'
 
 const config = {
-  enabled: true, frequency_hours: 24, run_days: [0, 1, 2], window_start_hour: 8, window_end_hour: 20, timezone: 'UTC',
+  enabled: true, frequency_minutes: 30, alert_on_new_matches: true, email_alerts: false, run_days: [0, 1, 2], window_start_hour: 8, window_end_hour: 20, timezone: 'UTC',
   target_roles: ['Backend Developer'], keywords: [], excluded_keywords: [], locations: ['Berlin'], countries: [],
   workplace_types: ['remote'], experience_levels: [], employment_types: [], salary_min: null, include_companies: [],
   exclude_companies: [], industries: [], required_technologies: [], posted_within_days: null, min_match_score: 65,

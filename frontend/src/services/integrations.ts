@@ -24,7 +24,7 @@ export const sourceService = {
   catalog: () => api.get<SourceCatalog>('/api/sources/catalog'),
   list: () => api.get<JobSource[]>('/api/sources'),
   create: (body: SourceInput) => api.post<JobSource>('/api/sources', body),
-  update: (id: string, body: { display_name?: string | null; enabled?: boolean | null }) =>
+  update: (id: string, body: { display_name?: string | null; enabled?: boolean | null; credentials?: Record<string, string> }) =>
     api.patch<JobSource>(`/api/sources/${id}`, body),
   remove: (id: string) => api.delete(`/api/sources/${id}`),
   test: (id: string) => api.post<SourceTestResult>(`/api/sources/${id}/test`),

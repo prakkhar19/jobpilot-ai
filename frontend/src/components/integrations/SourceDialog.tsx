@@ -22,6 +22,7 @@ export function SourceDialog({
   const [identifier, setIdentifier] = useState('')
   const [displayName, setDisplayName] = useState('')
   const [enabled, setEnabled] = useState(true)
+  const [credentials, setCredentials] = useState<Record<string, string>>({})
   const [error, setError] = useState<string | null>(null)
   const [fieldError, setFieldError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
@@ -34,6 +35,7 @@ export function SourceDialog({
     setIdentifier('')
     setDisplayName('')
     setEnabled(true)
+    setCredentials({})
     setError(null)
     setFieldError(null)
   }
@@ -41,11 +43,16 @@ export function SourceDialog({
   const submit = async (e: FormEvent) => {
     e.preventDefault()
     setError(null)
-    if (!identifier.trim()) {
+    if (!identifier.trim() && !entry?.identifier_default) {
       setFieldError('Identifier is required.')
       return
     }
     if (!effectiveKind) return
+    const missing = (entry?.credential_fields ?? []).filter((f) => !credentials[f.key]?.trim())
+    if (missing.length) {
+      setError(`Please fill in: ${missing.map((f) => f.label).join(', ')}`)
+      return
+    }
     setFieldError(null)
     setSaving(true)
     try {
@@ -54,6 +61,7 @@ export function SourceDialog({
         identifier: identifier.trim(),
         display_name: displayName.trim(),
         enabled,
+        ...(entry?.credential_fields?.length ? { credentials } : {}),
       })
       toast.success('Job source added', { description: s.display_name })
       reset()
@@ -90,9 +98,28 @@ export function SourceDialog({
               ))}
             </Select>
           </Field>
-          <Field label="Identifier" required error={fieldError} hint={entry?.identifier_help}>
-            <Input value={identifier} onChange={(e) => setIdentifier(e.target.value)} />
+          <Field
+            label="Identifier"
+            required={!entry?.identifier_default}
+            error={fieldError}
+            hint={entry?.identifier_default ? `${entry.identifier_help} (default: ${entry.identifier_default})` : entry?.identifier_help}
+          >
+            <Input
+              value={identifier}
+              placeholder={entry?.identifier_default ?? ''}
+              onChange={(e) => setIdentifier(e.target.value)}
+            />
           </Field>
+          {(entry?.credential_fields ?? []).map((f) => (
+            <Field key={f.key} label={f.label} required hint={f.secret ? 'Stored encrypted; never shown again.' : undefined}>
+              <Input
+                type={f.secret ? 'password' : 'text'}
+                autoComplete="off"
+                value={credentials[f.key] ?? ''}
+                onChange={(e) => setCredentials((c) => ({ ...c, [f.key]: e.target.value }))}
+              />
+            </Field>
+          ))}
           <Field label="Display name" hint="Optional; detected automatically when possible.">
             <Input value={displayName} onChange={(e) => setDisplayName(e.target.value)} />
           </Field>

@@ -195,14 +195,26 @@ function AgentSettingsForm({ config }: { config: AgentConfig }) {
             label="Run the agent automatically"
             description={`Last run: ${formatDate(config.last_run_at, true)} · Next run: ${config.next_run_at ? formatDate(config.next_run_at, true) : 'not scheduled'}`}
           />
+          <Switch
+            checked={form.alert_on_new_matches}
+            onCheckedChange={(v) => set('alert_on_new_matches', v)}
+            label="Alert me instantly about strong new matches"
+            description="In-app notification as soon as a new job above your minimum score is found — apply early."
+          />
+          <Switch
+            checked={form.email_alerts}
+            onCheckedChange={(v) => set('email_alerts', v)}
+            label="Also email me new matches"
+            description="Requires SMTP to be configured on this server."
+          />
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            <Field label="Run every (hours)" hint="1–168 hours.">
+            <Field label="Search every (minutes)" hint="Minimum 15. Sources with usage limits are checked less often automatically.">
               <Input
                 type="number"
-                min={1}
-                max={168}
-                value={form.frequency_hours}
-                onChange={(e) => set('frequency_hours', Math.max(1, Math.min(168, Number(e.target.value) || 1)))}
+                min={15}
+                max={10080}
+                value={form.frequency_minutes}
+                onChange={(e) => set('frequency_minutes', Math.max(15, Math.min(10080, Number(e.target.value) || 15)))}
               />
             </Field>
             <Field label="Window start">
