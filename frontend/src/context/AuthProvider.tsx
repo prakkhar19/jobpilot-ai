@@ -52,7 +52,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       await authService.logout()
     } finally {
       const prev = qc.getQueryData<AuthStatus>(AUTH_QUERY_KEY)
-      qc.clear()
+      // Drop all private data but keep the auth query itself: clearing it would detach the mounted
+      // observer, which then keeps showing the old (logged-in) user and bounces /login back to the app.
+      qc.removeQueries({ predicate: (q) => q.queryKey[0] !== AUTH_QUERY_KEY[0] })
       qc.setQueryData<AuthStatus>(AUTH_QUERY_KEY, {
         registration_open: prev?.registration_open ?? false,
         single_user_mode: prev?.single_user_mode ?? false,
