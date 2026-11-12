@@ -318,3 +318,31 @@ def test_india_region_filter():
         assert not ok(loc), loc
     assert not ok("Remote", "remote", "Applicants must be located in the United States.")
     assert ok("", "unknown")
+
+
+def test_retired_model_gives_clear_error(monkeypatch):
+    import httpx
+    import pytest
+
+    from app.adapters.llm.base import LLMError
+    from app.adapters.llm.openai_compat import OpenAICompatibleClient
+
+    monkeypatch.setattr("app.security.ssrf.validate_url", lambda url, **k: url)
+    transport = httpx.MockTransport(lambda r: httpx.Response(410, json={"detail": "Function has reached end of life"}))
+    c = OpenAICompatibleClient(model="old/model", api_key="k", base_url="https://llm.example.com/v1",
+                               transport=transport, max_retries=0)
+    with pytest.raises(LLMError) as exc:
+        c.complete("s", "u")
+    assert exc.value.status == 410 and "retired" in str(exc.value)
+
+
+def test_provider_rejects_email_as_model_name():
+    import pytest
+    from pydantic import ValidationError
+
+    from app.schemas.ai import AIProviderIn
+
+    with pytest.raises(ValidationError, match="email address"):
+        AIProviderIn(name="n", provider="openai_compatible", model="m", embedding_model="friend@gmail.com")
+    ok = AIProviderIn(name="n", provider="openai_compatible", model=" nvidia/nemotron-3-super-120b-a12b ")
+    assert ok.model == "nvidia/nemotron-3-super-120b-a12b"
