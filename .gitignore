@@ -23,7 +23,7 @@ playwright-report/
 test-results/
 
 # Data — never commit personal data, resumes or databases
-data/
+/data/
 backups/
 *.db
 *.sqlite

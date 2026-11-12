@@ -77,6 +77,12 @@ export default function JobDetailPage() {
     error: 'Verification failed',
     onSuccess: setDetail,
   })
+  const findOfficial = useMutationToast({
+    mutationFn: () => jobService.findOfficial(jobId),
+    success: 'Found the official company posting — you can apply directly with the employer',
+    error: 'Not found on the company site',
+    onSuccess: setDetail,
+  })
   const rematch = useMutationToast({
     mutationFn: () => jobService.rematch(jobId),
     success: 'Match recomputed',
@@ -135,7 +141,7 @@ export default function JobDetailPage() {
 
   const j = job.data
   const salary = formatSalary(j)
-  const postingUrl = j.posting_url || j.application_url
+  const postingUrl = j.official_url || j.posting_url || j.application_url
   const mandatory = j.requirements.filter((r) => r.is_mandatory)
   const optional = j.requirements.filter((r) => !r.is_mandatory)
 
@@ -157,6 +163,7 @@ export default function JobDetailPage() {
               {j.is_demo && <Badge tone="warning">Demo job (fictional)</Badge>}
               {j.status === 'expired' ? <Badge tone="danger">No longer open</Badge> : <Badge tone="success">Open</Badge>}
               {j.hidden && <Badge>Hidden</Badge>}
+              {j.official_url ? <Badge tone="success">Official company posting</Badge> : null}
               {j.saved && <Badge tone="primary">Saved</Badge>}
               {j.application_status && <ApplicationStatusBadge status={j.application_status} />}
             </div>
@@ -164,7 +171,7 @@ export default function JobDetailPage() {
           <div className="flex flex-wrap gap-2">
             {postingUrl && (
               <a href={postingUrl} target="_blank" rel="noopener noreferrer" className={buttonClasses('outline')}>
-                <ExternalLink className="h-4 w-4" aria-hidden="true" /> Open original posting
+                <ExternalLink className="h-4 w-4" aria-hidden="true" /> {j.official_url ? 'Apply on company site' : 'Open original posting'}
               </a>
             )}
             {j.application_id ? (
@@ -198,6 +205,11 @@ export default function JobDetailPage() {
           <Button variant="outline" size="sm" onClick={() => genLetter.mutate()} loading={genLetter.isPending}>
             <Mail className="h-4 w-4" aria-hidden="true" /> Generate cover letter
           </Button>
+          {!j.official_url && ['email_alerts', 'adzuna', 'remotive', 'arbeitnow', 'manual'].includes(j.source_kind) && (
+            <Button variant="outline" size="sm" onClick={() => findOfficial.mutate()} loading={findOfficial.isPending}>
+              <ExternalLink className="h-4 w-4" aria-hidden="true" /> Find on company site
+            </Button>
+          )}
           <Button variant="outline" size="sm" onClick={() => verify.mutate()} loading={verify.isPending}>
             <ShieldCheck className="h-4 w-4" aria-hidden="true" /> Verify still open
           </Button>

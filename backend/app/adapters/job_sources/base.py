@@ -77,9 +77,18 @@ class JobSourceAdapter(ABC):
     identifier_help: str = ""
     # Whether the listing is complete (so jobs missing from it can be marked expired).
     complete_listing: bool = True
+    # Minimum minutes between automatic checks of one source (respects each provider's usage rules).
+    min_interval_minutes: int = 15
+    # When True the interval also applies to manual runs (the provider's usage rules require it).
+    strict_interval: bool = False
+    # Credentials the user must supply, e.g. [{"key": "app_id", "label": "App ID", "secret": False}].
+    credential_fields: list[dict] = []
+    identifier_default: str = ""
+    attribution: str = ""
 
-    def __init__(self, client: SafeHttpClient | None = None) -> None:
+    def __init__(self, client: SafeHttpClient | None = None, credentials: dict[str, str] | None = None) -> None:
         self._client = client
+        self.credentials = credentials or {}
 
     @property
     def client(self) -> SafeHttpClient:

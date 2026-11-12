@@ -43,7 +43,7 @@ def put_agent_config(body: AgentConfigIn, db: DB, user: CurrentUser) -> AgentCon
     if body.application_mode == "authorized" and not (body.acknowledge_authorized_automation or cfg.authorized_automation_ack_at):
         raise DomainError("Authorized automation requires explicit acknowledgement.")
     data = body.model_dump(exclude={"acknowledge_authorized_automation"})
-    schedule_changed = any(getattr(cfg, k) != data[k] for k in ("enabled", "frequency_hours", "run_days"))
+    schedule_changed = any(getattr(cfg, k) != data[k] for k in ("enabled", "frequency_minutes", "run_days"))
     for k, v in data.items():
         setattr(cfg, k, v)
     if body.application_mode == "authorized" and body.acknowledge_authorized_automation and not cfg.authorized_automation_ack_at:

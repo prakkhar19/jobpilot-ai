@@ -36,8 +36,8 @@ export function ConfigSummary({ config, error, loading, onRetry }: {
                 <span key="s" className="flex flex-wrap items-center gap-1.5">
                   {config.paused ? <Badge tone="warning">Paused</Badge> : config.enabled ? <Badge tone="success">Enabled</Badge> : <Badge>Manual only</Badge>}
                   <span>
-                    every {config.frequency_hours}h · {config.run_days.map((d) => WEEKDAYS[d] ?? d).join(', ') || 'no days'} ·{' '}
-                    {config.window_start_hour}:00–{config.window_end_hour}:00 {config.timezone}
+                    every {config.frequency_minutes} min · {config.run_days.map((d) => WEEKDAYS[d] ?? d).join(', ') || 'no days'} ·{' '}
+                    {config.window_start_hour === config.window_end_hour ? 'all day' : `${config.window_start_hour}:00–${config.window_end_hour}:00`} {config.timezone}
                   </span>
                 </span>,
               ],

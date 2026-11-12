@@ -28,24 +28,24 @@ test("new user can register through the UI and reach the dashboard", async ({ pa
   const email = `ui-${Date.now()}@example.com`;
   await page.goto("/register");
   await page.getByLabel("Full name").fill("UI Tester");
-  await page.getByLabel("Email").fill(email);
-  await page.getByLabel("Password", { exact: true }).fill("Ui-Test-Password-1");
-  await page.getByLabel("Confirm password").fill("Ui-Test-Password-1");
+  await page.getByLabel(/^Email/).fill(email);
+  await page.locator('input[type="password"]').nth(0).fill("Ui-Test-Password-1");
+  await page.locator('input[type="password"]').nth(1).fill("Ui-Test-Password-1");
   await page.locator('button[type="submit"]').click();
   await expect(page).toHaveURL(/onboarding/);
   await shot(page, "onboarding");
   await page.getByRole("button", { name: "Skip setup" }).click();
-  await expect(page.getByRole("heading", { name: "Dashboard" }).first()).toBeVisible();
+  await expect(page.getByRole("heading", { name: /Welcome back|Dashboard/ }).first()).toBeVisible();
   expect(errors).toEqual([]);
 });
 
 test("seeded demo candidate: every main page renders with real data", async ({ page }) => {
   const errors = trackErrors(page);
   await page.goto("/login");
-  await page.getByLabel("Email").fill(DEMO_EMAIL);
-  await page.getByLabel("Password").fill(DEMO_PASSWORD);
+  await page.getByLabel(/^Email/).fill(DEMO_EMAIL);
+  await page.locator('input[type="password"]').fill(DEMO_PASSWORD);
   await page.locator('button[type="submit"]').click();
-  await expect(page.getByRole("heading", { name: "Dashboard" }).first()).toBeVisible();
+  await expect(page.getByRole("heading", { name: /Welcome back|Dashboard/ }).first()).toBeVisible();
   await page.waitForLoadState("networkidle");
   await shot(page, "dashboard");
 

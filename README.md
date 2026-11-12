@@ -9,6 +9,18 @@ Your data stays on your server. You bring your own AI provider (or none at all).
 > JobPilot never invents experience. Every AI-generated sentence is fact-checked against the profile
 > *you* approved; anything that adds skills, employers, numbers or credentials you don't have is rejected.
 
+![Dashboard](docs/screenshots/dashboard.png)
+
+<details><summary>More screenshots (synthetic demo data)</summary>
+
+| Explainable match | Resume Studio | Applications |
+|---|---|---|
+| ![Job match](docs/screenshots/job-match.png) | ![Resume Studio](docs/screenshots/resume-studio.png) | ![Applications](docs/screenshots/applications.png) |
+| **Analytics** | **Agent activity** | **Integrations** |
+| ![Analytics](docs/screenshots/analytics.png) | ![Agent](docs/screenshots/agent.png) | ![Integrations](docs/screenshots/integrations.png) |
+
+</details>
+
 ---
 
 ## What it does
@@ -28,13 +40,14 @@ Your data stays on your server. You bring your own AI provider (or none at all).
 
 | Integration | Status |
 |---|---|
-| Greenhouse public job boards | ✅ Discovery, status checks, form inspection, assisted pre-fill |
-| Lever public postings | ✅ Discovery, status checks, form inspection, assisted pre-fill |
-| Ashby public job boards | ✅ Discovery, status checks |
-| Company career pages with schema.org `JobPosting` | ✅ Discovery (robots.txt respected) |
-| Manual import (any site) | ✅ Paste URL/text |
+| Built-in company directory (105 verified companies on Greenhouse/Lever/Ashby, ~11k+ open jobs) | ✅ Searched automatically, no links needed |
+| Adzuna (aggregates thousands of job sites; free API key) | ✅ Search by your roles + locations |
+| Job-alert emails: LinkedIn, Naukri, Wellfound, Instahyre, Indeed, Foundit, Glassdoor | ✅ Imported automatically from your inbox (read-only IMAP) |
+| Find the same job on the company's own careers board | ✅ Full description + apply directly with the employer |
+| Remotive (remote jobs), Arbeitnow (Europe) | ✅ Free public APIs, checked within their usage limits |
+| Greenhouse / Lever / Ashby boards you add, career pages with schema.org `JobPosting` | ✅ |
 | Sandbox employer portal (`DEMO_MODE`) | ✅ Full automated submission, for demos/tests only |
-| LinkedIn, Indeed, Naukri, Wellfound, Instahyre, Foundit, Glassdoor | ❌ Not automated (no permitted API). Import postings manually. |
+| Logging into LinkedIn/Naukri/etc. to search or "Easy Apply" | ❌ Not done — their terms forbid bots and accounts get banned. Their jobs arrive via alert emails instead. |
 | Automated *submission* to real employers | ❌ Deliberately not supported — JobPilot pre-fills, you submit. See [docs/INTEGRATIONS.md](docs/INTEGRATIONS.md). |
 
 AI providers: any **OpenAI-compatible** endpoint (OpenAI, NVIDIA NIM / Nemotron, OpenRouter, Ollama,
