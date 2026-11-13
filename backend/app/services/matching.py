@@ -16,6 +16,7 @@ from datetime import UTC, date, datetime
 from sqlalchemy.orm import Session
 
 from app.models import AgentConfiguration, CandidateProfile, Job, JobMatch
+from app.services.discovery import _role_matches
 from app.services.jd_analysis import JDAnalysis, analysis_from_job, analyze_job
 from app.services.skills import extract_skills, skill_key
 
@@ -247,6 +248,12 @@ def _skill_component(key: str, wanted: list[str], facts: CandidateFacts, weight:
     return Component(key, score, weight, detail=detail, matched=matched, missing=missing)
 
 
+# Below this length a "description" is only a title/company/location stub (e.g. from a job-alert email).
+STUB_DESCRIPTION_CHARS = 400
+# A title-only job can look perfect on the little we know; cap it so full postings that prove a fit rank higher.
+STUB_SCORE_CAP = 70.0
+
+
 def score_match(
     job: Job,
     analysis: JDAnalysis,
@@ -276,7 +283,13 @@ def score_match(
         sim = max(0.0, min(1.0, raw / 0.30))
         method = "tfidf"
         detail = f"Keyword-weighted (TF-IDF) similarity {raw:.2f}."
-    comps.append(Component("semantic_similarity", sim if facts.text.strip() else None, weights["semantic_similarity"], detail=detail))
+    stub = len((job.description_text or "").strip()) < STUB_DESCRIPTION_CHARS
+    if stub:
+        comps.append(Component("semantic_similarity", None, weights["semantic_similarity"], applicable=False,
+                               detail="Only the job title is known, so content similarity can't be measured."))
+    else:
+        comps.append(Component("semantic_similarity", sim if facts.text.strip() else None,
+                               weights["semantic_similarity"], detail=detail))
 
     # Experience
     exp = Component("experience", None, weights["experience"])
@@ -304,7 +317,11 @@ def score_match(
         role = Component("role_alignment", None, weights["role_alignment"], detail="No titles or target roles in your profile.")
     else:
         best, best_t = 0.0, ""
-        for t in targets:
+        for t in (prefs.target_roles if prefs else []) or []:
+            if t and _role_matches(job.title, t):
+                best, best_t = 1.0, t
+                break
+        for t in targets if best < 1.0 else []:
             tt = _title_tokens(t)
             if tt:
                 ov = len(jt & tt) / len(jt)
@@ -352,6 +369,8 @@ def score_match(
     weight_applicable = sum(c.weight for c in comps if c.applicable)
     overall = (sum(c.weight * c.score for c in known) / weight_known * 100) if weight_known else 0.0
     confidence = weight_known / weight_applicable if weight_applicable else 0.0
+    if stub:
+        overall = min(overall, STUB_SCORE_CAP)
 
     strengths: list[str] = []
     gaps: list[str] = []
@@ -379,6 +398,9 @@ def score_match(
     for c in comps:
         if c.applicable and c.score is None:
             unknowns.append(f"{COMPONENT_LABELS[c.key]}: {c.detail}")
+    if stub:
+        unknowns.insert(0, "Only the title is known (from a job alert). Open the posting and paste the full "
+                           "description into this job for an accurate score.")
     if gaps:
         gaps.append("If you do have any of these, add them to your profile — missing data is not treated as a lack of skill.")
 

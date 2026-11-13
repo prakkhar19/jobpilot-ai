@@ -346,3 +346,24 @@ def test_provider_rejects_email_as_model_name():
         AIProviderIn(name="n", provider="openai_compatible", model="m", embedding_model="friend@gmail.com")
     ok = AIProviderIn(name="n", provider="openai_compatible", model=" nvidia/nemotron-3-super-120b-a12b ")
     assert ok.model == "nvidia/nemotron-3-super-120b-a12b"
+
+
+def test_title_only_job_scores_on_target_role_and_is_capped():
+    from types import SimpleNamespace
+
+    from app.services.jd_analysis import JDAnalysis
+    from app.services.matching import STUB_SCORE_CAP, CandidateFacts, normalize_weights, score_match
+
+    facts = CandidateFacts()
+    facts.text = "Built RAG pipelines with Python, LangChain and FastAPI. " * 20
+    facts.titles = ["Software Engineer | Generative AI, LLMs & MERN Stack"]
+    prefs = SimpleNamespace(target_roles=["LLM Engineer"], locations=["Noida"], workplace_types=["remote", "onsite"])
+    stub = SimpleNamespace(title="Artificial Intelligence Engineer", location="Remote", workplace_type="remote",
+                           seniority=None, description_text="Artificial Intelligence Engineer\nAcme · Remote\n\n"
+                           "Imported from a Naukri job-alert email.")
+    r = score_match(stub, JDAnalysis(), facts, weights=normalize_weights(None), prefs=prefs)
+    role = next(c for c in r.components if c.key == "role_alignment")
+    sim = next(c for c in r.components if c.key == "semantic_similarity")
+    assert role.score == 1.0 and not sim.applicable
+    assert r.overall == STUB_SCORE_CAP
+    assert any("Only the title is known" in u for u in r.unknowns)
