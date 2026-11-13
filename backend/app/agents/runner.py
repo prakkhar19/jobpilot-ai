@@ -85,6 +85,23 @@ class UserLock:
         elif self._local is not None and self._local.locked():
             self._local.release()
 
+    @staticmethod
+    def force_release(user_id: uuid.UUID) -> None:
+        """Free a lock left behind by a run whose worker died (restart, crash, host asleep)."""
+        key = f"lock:agent:{user_id}"
+        if not get_settings().celery_eager:
+            try:
+                import redis
+
+                redis.Redis.from_url(get_settings().redis_url, socket_timeout=3).delete(key)
+                return
+            except Exception:  # noqa: BLE001
+                log.warning("Could not free stale agent lock %s; it will expire automatically", key)
+                return
+        lock = _local_locks.get(key)
+        if lock is not None and lock.locked():
+            lock.release()
+
 
 # ------------------------------------------------------------------------------------------- enqueue
 
@@ -428,6 +445,8 @@ def tick(now: datetime | None = None) -> dict:
             if now - hb > STALE_AFTER:
                 t.state, t.error, t.finished_at = "FAILED", "Worker stopped responding (recovered by scheduler).", now
                 _log(db, t, "error", "FAILED", t.error)
+                # Without this, the dead run's lock blocks every new run until it expires (up to an hour).
+                UserLock.force_release(t.user_id)
                 failed_stale += 1
         db.commit()
         for cfg in db.scalars(select(AgentConfiguration).where(AgentConfiguration.enabled.is_(True),
