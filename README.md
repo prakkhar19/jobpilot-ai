@@ -28,7 +28,7 @@ Your data stays on your server. You bring your own AI provider (or none at all).
 | Stage | What happens |
 |---|---|
 | **Onboarding** | Upload a PDF/DOCX resume → structured profile is extracted (rule-based, optionally AI-assisted with a grounding check) → you review, edit and approve it. The original file is stored unchanged. |
-| **Discovery** | Runs around the clock (every 15 minutes by default): a built-in directory of 105 company job boards, job-alert emails from LinkedIn/Naukri/Wellfound/Instahyre, Adzuna, Remotive and Arbeitnow, plus any Greenhouse/Lever/Ashby board or career page you add. Filters, de-duplication across sources, expiry checks, and instant alerts for strong matches. Jobs found elsewhere are looked up on the company's own careers site so you can apply directly. |
+| **Discovery** | Runs around the clock (every 15 minutes by default): a built-in directory of 123 company job boards, job-alert emails from LinkedIn/Naukri/Wellfound/Instahyre, Adzuna, Remotive and Arbeitnow, plus any Greenhouse/Lever/Ashby board or career page you add. Filters, de-duplication across sources, expiry checks, and instant alerts for strong matches. Jobs found elsewhere are looked up on the company's own careers site so you can apply directly. |
 | **Location** | Pick cities, or set the country to **India** for region mode: office/hybrid jobs anywhere in India plus remote roles open to India. Remote jobs limited to the US, UK, Europe etc. are dropped. |
 | **Matching** | Weighted, configurable score from required/preferred skills, content similarity (TF-IDF or embeddings), experience, title alignment, education and location — every component explained. Title matching understands common variants (Full-Stack/Fullstack, Backend/Back End, LLM/AI/GenAI Engineer). Missing profile data is shown as *unknown*, never as a gap. |
 | **Resume Studio** | Per-job tailored resume: relevant skills first, bullets reordered, best projects selected, optional AI rephrasing with fact-checking. ATS-friendly DOCX + PDF, 4 templates, version history, side-by-side comparison with your original. |
@@ -41,7 +41,7 @@ Your data stays on your server. You bring your own AI provider (or none at all).
 
 | Integration | Status |
 |---|---|
-| Built-in company directory (105 verified companies on Greenhouse/Lever/Ashby, incl. many hiring in India — Paytm, Meesho, CRED, Groww, Sarvam AI, Databricks, Stripe…; ~11k+ open jobs) | ✅ Searched automatically, no links needed |
+| Built-in company directory (123 verified companies on Greenhouse/Lever/Ashby, incl. many hiring in India — Paytm, Meesho, CRED, Groww, Sarvam AI, Zeta, Tekion, DevRev, Databricks…; ~11k+ open jobs) | ✅ Searched automatically, no links needed |
 | Adzuna (aggregates thousands of job sites; free API key) | ✅ Search by your roles + locations |
 | Job-alert emails: LinkedIn, Naukri, Wellfound, Instahyre, Indeed, Foundit, Glassdoor | ✅ Imported automatically from your inbox (read-only IMAP) |
 | Find the same job on the company's own careers board | ✅ Full description + apply directly with the employer |

@@ -6,7 +6,7 @@
 
 | Kind | Setup | Notes |
 |---|---|---|
-| `directory` | none | 105 company boards (Greenhouse/Lever/Ashby, incl. companies hiring in India) verified live on 2026-11-10/12, ~11.5k openings; a full scan takes ~3 minutes in the worker. Checked at most every 30 min. |
+| `directory` | none | 123 company boards (Greenhouse/Lever/Ashby, incl. companies hiring in India) verified live on 2026-11-10/13, ~11.5k openings; a full scan takes ~3 minutes in the worker. Checked at most every 30 min. |
 | `adzuna` | free App ID + Key from developer.adzuna.com; identifier = country code (`in`, `gb`, `us`…) | Searches each target role × up to 3 locations, newest first, 50 results each. Gives description *snippets*. Terms allow personal job-search use; listings credited to Adzuna. India support not confirmed in Adzuna's docs — the Test button tells you. |
 | `email_alerts` | IMAP server, email, **app password** (Gmail: Google Account → Security → App passwords) | Reads job-alert emails from LinkedIn, Naukri, Wellfound, Instahyre, Indeed, Foundit, Glassdoor from the last 3 days. Read-only (`BODY.PEEK`, mailbox opened read-only); only messages from those senders are opened; their websites are never fetched. Checked every 15 min. |
 | `remotive` | none | Remote jobs. Remotive asks for max 4 requests/day → checked at most every 6 h (also for manual runs). Listings are delayed 24 h by Remotive and credited to it. |
