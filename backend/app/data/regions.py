@@ -30,7 +30,21 @@ FOREIGN_PLACES = [
     "bangkok", "pakistan", "bangladesh", "sri lanka", "nepal", "san francisco", "new york", "nyc", "seattle",
     "boston", "austin", "chicago", "los angeles", "denver", "atlanta", "toronto", "vancouver", "montreal",
     "washington", "california", "texas", "remote us", "remote - us", "remote, us", "pst", "est", "cet",
+    "us", "u.s", "palo alto", "mountain view", "sunnyvale", "santa clara", "san jose", "san diego", "san mateo",
+    "redwood city", "menlo park", "oakland", "bay area", "silicon valley", "dallas", "houston", "miami", "orlando",
+    "philadelphia", "pittsburgh", "portland", "phoenix", "salt lake", "minneapolis", "detroit", "raleigh",
+    "nashville", "honolulu", "hawaii", "florida", "oklahoma", "colorado", "massachusetts", "new jersey",
+    "virginia", "ottawa", "calgary", "manchester", "edinburgh", "hamburg", "frankfurt", "vienna", "brussels",
+    "prague", "budapest", "krakow", "bucharest", "sofia", "belgrade", "athens", "istanbul", "riyadh", "doha",
+    "abu dhabi", "kuwait", "bahrain", "oman", "cairo", "lagos", "nairobi", "cape town", "auckland", "osaka",
+    "shenzhen", "taipei", "kuala lumpur", "ho chi minh", "hanoi",
 ]
+# US state codes ("Palo Alto, CA", "Remote - TX"). Codes that are also Indian (IN, GA, MN, OR, TN, LA, AR) are left
+# out, and an Indian city in the same string always wins (checked first).
+_US_STATE = re.compile(
+    r"(?:^|[,(;/\-]\s*)(?:AL|AK|AZ|CA|CO|CT|DC|DE|FL|HI|IA|ID|IL|KS|KY|MA|MD|ME|MI|MO|MS|MT|NC|ND|NE|NH|NJ|NM|NV|"
+    r"NY|OH|OK|PA|RI|SC|SD|TX|UT|VA|VT|WA|WI|WV|WY)\b"
+)
 # Remote job descriptions that restrict where you must live.
 _FOREIGN_ONLY = re.compile(
     r"(?i)\b(must (?:be )?(?:located|based|reside|live) in (?:the )?(?:us|u\.s\.|united states|usa|canada|uk|"
@@ -53,14 +67,15 @@ def open_to_india(location: str, workplace_type: str = "unknown", description: s
         return None if not _FOREIGN_ONLY.search(description or "") else False
     if mentions_india(loc):
         return True
+    foreign = _has(loc, FOREIGN_PLACES) or bool(_US_STATE.search(location))
     remote = workplace_type == "remote" or "remote" in loc
     if remote:
         if _has(loc, OPEN_REGIONS):
             return True
-        if _has(loc, FOREIGN_PLACES):
+        if foreign:
             return False
         # Plain "Remote": trust it unless the description restricts the country.
         return not _FOREIGN_ONLY.search(description or "")
-    if _has(loc, FOREIGN_PLACES):
+    if foreign:
         return False
     return None

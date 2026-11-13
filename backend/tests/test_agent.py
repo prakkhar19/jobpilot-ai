@@ -91,3 +91,27 @@ def test_scheduler_tick_starts_due_runs(client, live_server):
     tasks = client.get("/api/agent/tasks").json()
     assert tasks[0]["trigger"] == "schedule"
     assert tick()["started"] == 0  # next_run_at pushed forward → no runaway loop
+
+
+def test_stale_run_frees_its_lock(client):
+    """A run whose worker died must not block new runs until its lock expires."""
+    import uuid
+    from datetime import timedelta
+
+    from app.agents.runner import UserLock
+    from app.core.database import SessionLocal
+    from app.models import AgentTask
+
+    user_id = uuid.UUID(client.get("/api/auth/me").json()["id"])
+    dead = UserLock(user_id)
+    assert dead.acquire()
+    old = datetime.now(UTC) - timedelta(hours=1)
+    with SessionLocal() as db:
+        db.add(AgentTask(user_id=user_id, kind="pipeline", trigger="schedule", state="DISCOVERING",
+                         celery_task_id="dead", stats={}, error="", started_at=old, heartbeat_at=old))
+        db.commit()
+    assert not UserLock(user_id).acquire()
+    assert tick()["failed_stale"] == 1
+    fresh = UserLock(user_id)
+    assert fresh.acquire()
+    fresh.release()
