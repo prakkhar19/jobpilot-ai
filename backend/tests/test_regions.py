@@ -42,3 +42,11 @@ def test_india_locations_are_kept(location, workplace):
 @pytest.mark.parametrize("location", ["N/A", "In-person", ""])
 def test_unknown_locations_stay_unknown(location):
     assert open_to_india(location, "unknown") is None
+
+
+def test_latin_america_jobs_are_not_open_to_india():
+    from app.data.regions import open_to_india
+
+    assert open_to_india("Remote - Latin & South America", "remote") is False
+    assert open_to_india("Quito, Ecuador", "onsite") is False
+    assert open_to_india("Bengaluru", "onsite") is True

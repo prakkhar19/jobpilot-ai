@@ -37,7 +37,9 @@ FOREIGN_PLACES = [
     "virginia", "ottawa", "calgary", "manchester", "edinburgh", "hamburg", "frankfurt", "vienna", "brussels",
     "prague", "budapest", "krakow", "bucharest", "sofia", "belgrade", "athens", "istanbul", "riyadh", "doha",
     "abu dhabi", "kuwait", "bahrain", "oman", "cairo", "lagos", "nairobi", "cape town", "auckland", "osaka",
-    "shenzhen", "taipei", "kuala lumpur", "ho chi minh", "hanoi",
+    "shenzhen", "taipei", "kuala lumpur", "ho chi minh", "hanoi", "south america", "central america", "latin",
+    "ecuador", "quito", "uruguay", "montevideo", "costa rica", "sao paulo", "rio de janeiro", "bogota", "medellin",
+    "buenos aires", "mexico city", "guadalajara", "santiago", "lima",
 ]
 # US state codes ("Palo Alto, CA", "Remote - TX"). Codes that are also Indian (IN, GA, MN, OR, TN, LA, AR) are left
 # out, and an Indian city in the same string always wins (checked first).
