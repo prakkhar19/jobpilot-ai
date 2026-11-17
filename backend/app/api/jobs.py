@@ -133,7 +133,7 @@ def test_source(source_id: uuid.UUID, db: DB, user: CurrentUser) -> dict:
 def discover_now(body: DiscoverIn, db: DB, user: CurrentUser) -> dict:
     """Run discovery → analysis → matching now, as a background agent task."""
     if not db.scalar(select(JobSource.id).where(JobSource.user_id == user.id, JobSource.enabled.is_(True))):
-        raise DomainError("Add at least one job source first (Discover Jobs → Sources).")
+        raise DomainError("No enabled job sources. Add or enable one under Integrations → Job sources.")
     task = enqueue_run(db, user, trigger="manual", source_ids=[str(s) for s in body.source_ids or []])
     return {"task_id": str(task.id), "state": task.state}
 

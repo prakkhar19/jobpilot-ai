@@ -1,7 +1,7 @@
 import { useQueryClient } from '@tanstack/react-query'
 import { Play, Square } from 'lucide-react'
 import { useCallback, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
 import { Alert, Button } from '@/components/ui'
 import { useTaskPolling } from '@/hooks/useTaskPolling'
@@ -37,6 +37,7 @@ export function DiscoveryRunner({
   size?: 'sm' | 'md'
 }) {
   const qc = useQueryClient()
+  const navigate = useNavigate()
   const [taskId, setTaskId] = useState<string | null>(null)
   const [starting, setStarting] = useState(false)
   const [cancelling, setCancelling] = useState(false)
@@ -62,7 +63,13 @@ export function DiscoveryRunner({
       setTaskId(res.task_id)
       toast.message('Discovery started', { description: 'Fetching jobs from your enabled sources…' })
     } catch (err) {
-      toast.error('Could not start discovery', { description: errorMessage(err) })
+      const msg = errorMessage(err)
+      toast.error('Could not start discovery', {
+        description: msg,
+        action: /job source/i.test(msg)
+          ? { label: 'Add a source', onClick: () => navigate('/integrations?tab=sources') }
+          : undefined,
+      })
     } finally {
       setStarting(false)
     }
