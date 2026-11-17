@@ -14,6 +14,7 @@ const JobsPage = lazy(() => import('@/pages/jobs/JobsPage'))
 const JobDetailPage = lazy(() => import('@/pages/jobs/JobDetailPage'))
 const ResumeStudioPage = lazy(() => import('@/pages/resumes/ResumeStudioPage'))
 const CoverLetterStudioPage = lazy(() => import('@/pages/cover-letters/CoverLetterStudioPage'))
+const ApplyModePage = lazy(() => import('@/pages/apply/ApplyModePage'))
 const ApplicationsPage = lazy(() => import('@/pages/applications/ApplicationsPage'))
 const ApplicationDetailPage = lazy(() => import('@/pages/applications/ApplicationDetailPage'))
 const InterviewsPage = lazy(() => import('@/pages/interviews/InterviewsPage'))
@@ -67,6 +68,7 @@ export default function App() {
         <Route path="resumes/:versionId" element={<ResumeStudioPage />} />
         <Route path="cover-letters" element={<CoverLetterStudioPage />} />
         <Route path="cover-letters/:letterId" element={<CoverLetterStudioPage />} />
+        <Route path="apply" element={<ApplyModePage />} />
         <Route path="applications" element={<ApplicationsPage />} />
         <Route path="applications/:appId" element={<ApplicationDetailPage />} />
         <Route path="interviews" element={<InterviewsPage />} />

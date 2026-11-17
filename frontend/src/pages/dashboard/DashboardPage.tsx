@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
-import { Award, Briefcase, CalendarCheck, Clock, FileText, Search, Send, Sparkles } from 'lucide-react'
+import { Award, Briefcase, Zap, CalendarCheck, Clock, FileText, Search, Send, Sparkles } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { AgentHealthCard } from '@/components/dashboard/AgentHealthCard'
 import { NextRunBadge } from '@/components/dashboard/NextRunBadge'
@@ -57,7 +57,12 @@ export default function DashboardPage() {
                 : 'Your job search at a glance.'}
             </p>
           </div>
-          <DiscoveryRunner />
+          <div className="flex flex-wrap items-center gap-2">
+            <Link to="/apply" className={buttonClasses('primary', 'md', 'bg-brand text-white shadow-lg shadow-primary/25')}>
+              <Zap className="h-4 w-4" aria-hidden="true" /> Start Apply Mode
+            </Link>
+            <DiscoveryRunner />
+          </div>
         </div>
       </section>
 

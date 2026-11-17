@@ -855,3 +855,26 @@ export interface Diagnostics {
     max_upload_mb: number
   }
 }
+
+export interface ApplyQueueItem {
+  job_id: string
+  title: string
+  company: string
+  location: string
+  workplace_type: string
+  source_kind: string
+  match_score: number
+  apply_url: string
+  discovered_at: ISODate
+  application_id: string | null
+  resume_version_id: string | null
+  cover_letter_id: string | null
+  cover_letter: string
+}
+
+export interface ApplyQueue {
+  items: ApplyQueueItem[]
+  total: number
+  applied_today: number
+  min_score: number
+}

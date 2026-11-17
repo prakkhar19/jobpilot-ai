@@ -14,6 +14,7 @@ import {
   Sparkles,
   UserRound,
   Users,
+  Zap,
   type LucideIcon,
 } from 'lucide-react'
 
@@ -50,6 +51,7 @@ export const NAV_GROUPS: NavGroup[] = [
   {
     label: 'Pipeline',
     items: [
+      { to: '/apply', label: 'Apply Mode', icon: Zap },
       { to: '/applications', label: 'Applications', icon: Briefcase },
       { to: '/interviews', label: 'Interviews', icon: CalendarClock },
       { to: '/analytics', label: 'Analytics', icon: BarChart3 },
