@@ -237,7 +237,7 @@ export default function ApplyModePage() {
                     onClick={() => setSteps((s) => ({ ...s, opened: true }))}
                     className={buttonClasses('outline', 'md', 'w-full justify-start')}
                   >
-                    <ExternalLink className="h-4 w-4" aria-hidden="true" /> Open the job &amp; click Apply
+                    <ExternalLink className="h-4 w-4" aria-hidden="true" /> Open the job &amp; click Apply <span className="font-normal text-subtle">(1-click uses your profile resume)</span>
                   </a>
                 </Step>
                 <Step n={2} done={steps.resume}>
@@ -246,7 +246,7 @@ export default function ApplyModePage() {
                     onClick={() => setSteps((s) => ({ ...s, resume: true }))}
                     className={buttonClasses('outline', 'md', 'w-full justify-start')}
                   >
-                    <FileDown className="h-4 w-4" aria-hidden="true" /> Download my tailored resume (PDF)
+                    <FileDown className="h-4 w-4" aria-hidden="true" /> Download my tailored resume <span className="font-normal text-subtle">(only if they ask for an upload)</span>
                   </a>
                 </Step>
                 <Step n={3} done={steps.letter}>
