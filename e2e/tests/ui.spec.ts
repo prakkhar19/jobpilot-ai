@@ -35,7 +35,7 @@ test("new user can register through the UI and reach the dashboard", async ({ pa
   await expect(page).toHaveURL(/onboarding/);
   await shot(page, "onboarding");
   await page.getByRole("button", { name: "Skip setup" }).click();
-  await expect(page.getByRole("heading", { name: /Welcome back|Dashboard/ }).first()).toBeVisible();
+  await expect(page.getByRole("heading", { name: /Welcome back|Good (morning|afternoon|evening)|Working late|Dashboard/ }).first()).toBeVisible();
   expect(errors).toEqual([]);
 });
 
@@ -45,7 +45,7 @@ test("seeded demo candidate: every main page renders with real data", async ({ p
   await page.getByLabel(/^Email/).fill(DEMO_EMAIL);
   await page.locator('input[type="password"]').fill(DEMO_PASSWORD);
   await page.locator('button[type="submit"]').click();
-  await expect(page.getByRole("heading", { name: /Welcome back|Dashboard/ }).first()).toBeVisible();
+  await expect(page.getByRole("heading", { name: /Welcome back|Good (morning|afternoon|evening)|Working late|Dashboard/ }).first()).toBeVisible();
   await page.waitForLoadState("networkidle");
   await shot(page, "dashboard");
 

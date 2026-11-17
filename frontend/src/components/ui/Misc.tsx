@@ -74,10 +74,14 @@ export function StatCard({
   className?: string
 }) {
   return (
-    <div className={cn('rounded-xl border border-border bg-surface p-4 shadow-xs', className)}>
+    <div className={cn('group relative overflow-hidden rounded-xl border border-border bg-surface p-4 shadow-xs', className)}>
       <div className="flex items-center justify-between gap-2">
         <p className="text-xs font-medium text-subtle">{label}</p>
-        {icon && <span className="text-subtle">{icon}</span>}
+        {icon && (
+          <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary-soft text-primary transition-transform duration-300 group-hover:scale-110 group-hover:rotate-6">
+            {icon}
+          </span>
+        )}
       </div>
       <p className="mt-2 text-2xl font-semibold tracking-tight text-fg tabular-nums">{value}</p>
       {hint && <p className="mt-1 text-xs text-subtle">{hint}</p>}

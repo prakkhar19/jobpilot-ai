@@ -49,6 +49,7 @@ import { applicationService } from '@/services/applications'
 import type { Application } from '@/types/api'
 import { APPLICATION_STATUS_LABELS, POST_SUBMISSION, SOURCE_KIND_LABELS } from '@/utils/constants'
 import { formatDate, humanize } from '@/utils/format'
+import { confetti } from '@/utils/confetti'
 
 const ANSWERABLE = new Set(['needs_input', 'awaiting_approval', 'ready_to_submit'])
 const FILLABLE = new Set(['awaiting_approval', 'ready_to_submit', 'needs_input'])
@@ -142,6 +143,8 @@ export default function ApplicationDetailPage() {
     onSuccess: (d) => {
       setStatusOpen(false)
       apply(d)
+      if (d.status === 'offer_received') confetti({ pieces: 220 })
+      else if (d.status === 'interview_scheduled') confetti({ pieces: 110 })
     },
   })
   const del = useMutationToast({

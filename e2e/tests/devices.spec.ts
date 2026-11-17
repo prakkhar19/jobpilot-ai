@@ -45,7 +45,7 @@ test("full journey works on this device", async ({ page, isMobile }, info) => {
     await expect(page).toHaveURL(/onboarding/);
     registered = true;
     await page.getByRole("button", { name: "Skip setup" }).click();
-    await expect(page.getByRole("heading", { name: /Welcome back|Dashboard/ }).first()).toBeVisible();
+    await expect(page.getByRole("heading", { name: /Welcome back|Good (morning|afternoon|evening)|Working late|Dashboard/ }).first()).toBeVisible();
 
     // 2. Upload a resume through the real file input and approve the profile
     await page.goto("/profile");
@@ -104,7 +104,7 @@ test("full journey works on this device", async ({ page, isMobile }, info) => {
     await page.getByLabel(/^Email/).fill(email);
     await page.locator('input[type="password"]').fill(PASSWORD);
     await page.locator('button[type="submit"]').click();
-    await expect(page.getByRole("heading", { name: /Welcome back|Dashboard/ }).first()).toBeVisible();
+    await expect(page.getByRole("heading", { name: /Welcome back|Good (morning|afternoon|evening)|Working late|Dashboard/ }).first()).toBeVisible();
 
     expect(errors).toEqual([]);
   } finally {

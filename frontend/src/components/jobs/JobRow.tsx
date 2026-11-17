@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { toast } from 'sonner'
 import { ApplicationStatusBadge } from '@/components/shared/StatusBadge'
-import { Badge, Button, ScoreBadge } from '@/components/ui'
+import { Badge, Button, ScoreRing } from '@/components/ui'
 import { errorMessage } from '@/services/api'
 import { jobService } from '@/services/jobs'
 import type { Job } from '@/types/api'
@@ -32,8 +32,8 @@ export function JobRow({ job }: { job: Job }) {
   const salary = formatSalary(job)
   const rec = job.recommendation as keyof typeof RECOMMENDATION_LABELS | null | undefined
   return (
-    <li className="flex items-start gap-4 px-4 py-4 hover:bg-surface-2/60 sm:px-5">
-      <ScoreBadge score={job.match_score} className="mt-0.5" />
+    <li className="group flex items-start gap-4 px-4 py-4 transition-colors hover:bg-surface-2/60 sm:px-5">
+      <ScoreRing score={job.match_score} size={42} className="transition-transform duration-300 group-hover:scale-105" />
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-2">
           <Link to={`/jobs/${job.id}`} className="font-medium text-fg hover:text-primary hover:underline">

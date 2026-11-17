@@ -1,6 +1,7 @@
 import { Menu as MenuIcon } from 'lucide-react'
 import { Suspense, useState } from 'react'
 import { Navigate, Outlet, useLocation } from 'react-router-dom'
+import { CommandPalette } from '@/components/layout/CommandPalette'
 import { Logo } from '@/components/layout/Logo'
 import { NotificationsBell } from '@/components/layout/NotificationsBell'
 import { Sidebar, SidebarNav } from '@/components/layout/Sidebar'
@@ -32,7 +33,7 @@ export function AppLayout() {
         <SidebarNav onNavigate={() => setNavOpen(false)} />
       </Drawer>
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="sticky top-0 z-30 flex h-14 items-center gap-2 border-b border-border bg-surface/90 px-4 backdrop-blur sm:px-6">
+        <header className="sticky top-0 z-30 flex h-14 items-center gap-2 glass border-b border-border px-4 sm:px-6">
           <Button variant="ghost" size="icon" className="lg:hidden" onClick={() => setNavOpen(true)} aria-label="Open navigation">
             <MenuIcon className="h-5 w-5" aria-hidden="true" />
           </Button>
@@ -45,6 +46,7 @@ export function AppLayout() {
             </Badge>
           )}
           <div className="ml-auto flex items-center gap-1">
+            <CommandPalette />
             <NotificationsBell />
             <ThemeToggle />
             <UserMenu />
@@ -52,7 +54,9 @@ export function AppLayout() {
         </header>
         <main id="main" tabIndex={-1} className="mx-auto w-full max-w-7xl flex-1 px-4 py-6 focus:outline-none sm:px-6 lg:px-8">
           <Suspense key={location.pathname} fallback={<LoadingState />}>
-            <Outlet />
+            <div key={location.pathname} className="animate-fade-up">
+              <Outlet />
+            </div>
           </Suspense>
         </main>
       </div>
