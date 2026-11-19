@@ -385,3 +385,10 @@ def test_linkedin_company_and_place_on_one_line_are_split():
     assert (jobs["Software Engineer"].company, jobs["Software Engineer"].location) == ("Gentrac Labs", "Noida")
     assert jobs["Software Engineer"].workplace_type == "hybrid"
     assert (jobs["Applied AI Engineer II"].company, jobs["Applied AI Engineer II"].location) == ("Deloitte", "Gurugram")
+
+
+def test_url_encoded_company_names_are_decoded():
+    html = ('<a href="https://www.naukri.com/jd/job-listings-full-stack-developer-agileapt-noida-1-to-3-years-191126000001">'
+            '<p>Full Stack Developer</p><p>Agileapt%20solutions</p><p>Noida</p></a>')
+    [job] = parse_alert_email("naukri", html, None)
+    assert job.company == "Agileapt solutions"

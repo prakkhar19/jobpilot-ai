@@ -15,6 +15,7 @@ import re
 from datetime import UTC, datetime, timedelta
 from email.header import decode_header, make_header
 from email.utils import parseaddr, parsedate_to_datetime
+from urllib.parse import unquote
 
 from bs4 import BeautifulSoup
 
@@ -51,7 +52,10 @@ def platform_for_sender(sender: str) -> str | None:
 
 
 def _clean(text: str) -> str:
-    return re.sub(r"\s+", " ", text or "").strip()
+    text = text or ""
+    if re.search(r"%[0-9A-Fa-f]{2}", text):  # some mailers leave names URL-encoded ("Acme%20Labs")
+        text = unquote(text)
+    return re.sub(r"\s+", " ", text).strip()
 
 
 _RATING = re.compile(r"^\d(\.\d)?$")
