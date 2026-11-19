@@ -55,6 +55,7 @@ def _clean(text: str) -> str:
 
 
 _RATING = re.compile(r"^\d(\.\d)?$")
+_WORKPLACE = re.compile(r"\s*\((on-site|onsite|hybrid|remote)\)", re.I)
 
 
 def _card_lines(tag) -> list[str]:  # noqa: ANN001
@@ -89,6 +90,15 @@ def parse_alert_email(platform: str, html: str, received: datetime | None) -> li
         rest = [x for x in lines if x != title]
         company = rest[0] if rest else ""
         location = rest[1] if len(rest) > 1 else ""
+        workplace = "remote" if re.search(r"(?i)remote", " ".join(rest)) else "unknown"
+        # LinkedIn puts company and place on one line: "Acme · Noida (On-site)". The next line is a perk
+        # ("Actively recruiting", a salary), not the location.
+        if " · " in company:
+            company, location = (x.strip() for x in company.split(" · ", 1))
+            wp = _WORKPLACE.search(location)
+            if wp:
+                workplace = {"on-site": "onsite", "onsite": "onsite"}.get(wp.group(1).lower(), wp.group(1).lower())
+                location = _WORKPLACE.sub("", location).strip()
         existing = jobs.get(job_id)
         if existing is not None and existing.company:
             continue
@@ -99,7 +109,7 @@ def parse_alert_email(platform: str, html: str, received: datetime | None) -> li
         jobs[job_id] = NormalizedJob(
             source_kind="email_alerts", external_id=f"{platform}:{job_id}", company=company[:300] or platform.title(),
             title=title[:300], location=location[:300],
-            workplace_type="remote" if re.search(r"(?i)remote", " ".join(rest)) else "unknown",
+            workplace_type=workplace,
             description_text=(f"{title}\n{snippet}\n\nImported from a {platform.title()} job-alert email. "
                               "Open the posting for the full description; paste it into this job to improve the match."),
             posted_at=received, application_url=url, posting_url=url,

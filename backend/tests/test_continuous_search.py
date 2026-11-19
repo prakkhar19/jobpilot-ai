@@ -367,3 +367,21 @@ def test_title_only_job_scores_on_target_role_and_is_capped():
     assert role.score == 1.0 and not sim.applicable
     assert r.overall == STUB_SCORE_CAP
     assert any("Only the title is known" in u for u in r.unknowns)
+
+
+LINKEDIN_CARD_ALERT = """<table><tr><td>
+<a href="https://www.linkedin.com/comm/jobs/view/4321000001/?trackingId=x">AI Developer</a>
+<p>Criclive.in · New Delhi (On-site)</p><p>Actively recruiting</p></td></tr>
+<tr><td><a href="https://www.linkedin.com/comm/jobs/view/4321000002/?trackingId=y">Software Engineer</a>
+<p>Gentrac Labs · Noida (Hybrid)</p><p>₹50K-₹80K / month</p></td></tr>
+<tr><td><a href="https://www.linkedin.com/comm/jobs/view/4321000003/">Applied AI Engineer II</a>
+<p>Deloitte · Gurugram</p><p>3 company alumni</p></td></tr></table>"""
+
+
+def test_linkedin_company_and_place_on_one_line_are_split():
+    jobs = {j.title: j for j in parse_alert_email("linkedin", LINKEDIN_CARD_ALERT, None)}
+    assert (jobs["AI Developer"].company, jobs["AI Developer"].location) == ("Criclive.in", "New Delhi")
+    assert jobs["AI Developer"].workplace_type == "onsite"
+    assert (jobs["Software Engineer"].company, jobs["Software Engineer"].location) == ("Gentrac Labs", "Noida")
+    assert jobs["Software Engineer"].workplace_type == "hybrid"
+    assert (jobs["Applied AI Engineer II"].company, jobs["Applied AI Engineer II"].location) == ("Deloitte", "Gurugram")
