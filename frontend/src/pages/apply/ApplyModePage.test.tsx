@@ -48,3 +48,15 @@ describe('ApplyModePage', () => {
     expect(screen.getByText('Today: 4 applied')).toBeInTheDocument()
   })
 })
+
+describe('referral helpers', () => {
+  it('writes a short note that fits a LinkedIn connection request', async () => {
+    const { referralMessage, peopleSearchUrl } = await import('@/utils/referral')
+    const msg = referralMessage('Asha', { title: 'Backend Developer', company: 'Acme & Co' })
+    expect(msg).toContain("I'm Asha.")
+    expect(msg).toContain('Backend Developer role at Acme & Co')
+    expect(msg.length).toBeLessThanOrEqual(300)
+    expect(referralMessage('', { title: 'X', company: 'Y' })).not.toContain("I'm .")
+    expect(peopleSearchUrl('Acme & Co')).toBe('https://www.linkedin.com/search/results/people/?keywords=Acme%20%26%20Co')
+  })
+})

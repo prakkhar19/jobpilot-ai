@@ -1,9 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Building2, Check, Copy, ExternalLink, FileDown, MapPin, PartyPopper, SkipForward, Sparkles, Wand2 } from 'lucide-react'
+import { Building2, Check, Copy, MessageSquareShare, ExternalLink, FileDown, MapPin, PartyPopper, SkipForward, Sparkles, Wand2 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { toast } from 'sonner'
 import { Badge, Button, Card, CardBody, ErrorState, LoadingState, PageHeader, ScoreRing, buttonClasses } from '@/components/ui'
+import { useAuth } from '@/context/auth'
 import { applyQueueService } from '@/services/applyQueue'
 import { errorMessage } from '@/services/api'
 import { resumeService } from '@/services/documents'
@@ -11,6 +12,7 @@ import { jobService } from '@/services/jobs'
 import type { ApplyQueueItem } from '@/types/api'
 import { cn } from '@/utils/cn'
 import { confetti } from '@/utils/confetti'
+import { peopleSearchUrl, referralMessage } from '@/utils/referral'
 import { SOURCE_KIND_LABELS, WORKPLACE_LABELS } from '@/utils/constants'
 import { formatRelative, humanize } from '@/utils/format'
 
@@ -35,6 +37,8 @@ function Step({ n, done, children }: { n: number; done: boolean; children: React
 
 export default function ApplyModePage() {
   const qc = useQueryClient()
+  const { user } = useAuth()
+  const firstName = (user?.full_name ?? '').trim().split(/\s+/)[0] ?? ''
   const queue = useQuery({ queryKey: QUEUE_KEY, queryFn: () => applyQueueService.list() })
   const [index, setIndex] = useState(0)
   const [steps, setSteps] = useState({ opened: false, resume: false, letter: false })
@@ -101,6 +105,16 @@ export default function ApplyModePage() {
       toast.success('Cover letter copied')
     } catch {
       toast.error('Could not copy. Open the cover letter and copy it manually.')
+    }
+  }
+
+  const copyReferral = async () => {
+    if (!item) return
+    try {
+      await navigator.clipboard.writeText(referralMessage(firstName, item))
+      toast.success('Referral message copied. Paste it in a LinkedIn connection note.')
+    } catch {
+      toast.error('Could not copy the message.')
     }
   }
 
@@ -254,6 +268,26 @@ export default function ApplyModePage() {
                     <Copy className="h-4 w-4" aria-hidden="true" /> Copy cover letter (if they ask)
                   </Button>
                 </Step>
+                <div className="rounded-lg border border-accent/30 bg-accent/5 p-3 text-sm">
+                  <p className="font-medium">Boost your chances: ask for a referral</p>
+                  <p className="mt-0.5 text-xs text-subtle">
+                    Referred candidates are far more likely to get interviews. Find someone at {item.company}, send a
+                    connection request and paste this note.
+                  </p>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    <a
+                      href={peopleSearchUrl(item.company)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className={buttonClasses('outline', 'sm')}
+                    >
+                      <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" /> People at {item.company}
+                    </a>
+                    <Button variant="outline" size="sm" onClick={() => void copyReferral()}>
+                      <MessageSquareShare className="h-3.5 w-3.5" aria-hidden="true" /> Copy referral note
+                    </Button>
+                  </div>
+                </div>
                 <details className="rounded-lg border border-border bg-surface-2/50 px-4 py-2 text-sm">
                   <summary className="cursor-pointer text-xs font-medium text-subtle">Preview cover letter</summary>
                   <p className="mt-2 whitespace-pre-line text-muted">{item.cover_letter}</p>

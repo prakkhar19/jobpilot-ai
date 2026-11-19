@@ -56,3 +56,16 @@ def test_queue_is_private(client, other_client):
     assert other_client.get("/api/apply-queue").json()["total"] == 0
     assert other_client.post(f"/api/apply-queue/{job['id']}/prepare").status_code == 404
     assert other_client.post(f"/api/apply-queue/{job['id']}/applied").status_code == 404
+
+
+def test_new_postings_rank_above_old_ones():
+    from datetime import UTC, datetime, timedelta
+
+    from app.api.apply_queue import _freshness_bonus
+    from app.models import Job
+
+    now = datetime(2026, 11, 19, tzinfo=UTC)
+    age = lambda days: _freshness_bonus(Job(discovered_at=now - timedelta(days=days)), now)  # noqa: E731
+    assert age(1) > age(5) > age(10) > age(30)
+    # a fresh 62 now outranks a month-old 70
+    assert 62 + age(1) > 70 + age(30)

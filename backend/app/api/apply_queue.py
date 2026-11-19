@@ -7,7 +7,7 @@ apply on the employer's site in seconds, then records that they applied.
 from __future__ import annotations
 
 import uuid
-from datetime import datetime
+from datetime import UTC, datetime
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from fastapi import APIRouter, Query
@@ -76,9 +76,27 @@ def _queue_rows(db: DB, user: User, min_score: float) -> list[tuple[Job, float, 
         .outerjoin(Application, (Application.job_id == Job.id) & (Application.user_id == user.id))
         .where(Job.user_id == user.id, Job.hidden.is_(False), Job.status != "expired", Job.duplicate_of_id.is_(None),
                JobMatch.overall_score >= min_score)
-        .order_by(JobMatch.overall_score.desc(), Job.discovered_at.desc())
     ).all()
-    return [(j, s, a) for j, s, a in rows if a is None or a.status not in _DONE]
+    rows = [(j, s, a) for j, s, a in rows if a is None or a.status not in _DONE]
+    now = datetime.now(UTC)
+    return sorted(rows, key=lambda r: (-(r[1] + _freshness_bonus(r[0], now)), -(r[0].discovered_at or now).timestamp()))
+
+
+def _freshness_bonus(job: Job, now: datetime) -> float:
+    """Early applicants get far more replies, so new postings move up and old ones (often filled) move down."""
+    seen = job.posted_at or job.discovered_at
+    if seen is None:
+        return 0.0
+    if seen.tzinfo is None:
+        seen = seen.replace(tzinfo=UTC)
+    age_days = (now - seen).total_seconds() / 86400
+    if age_days <= 2:
+        return 10.0
+    if age_days <= 7:
+        return 5.0
+    if age_days > 21:
+        return -10.0
+    return 0.0
 
 
 @router.get("/apply-queue", response_model=QueueOut)
