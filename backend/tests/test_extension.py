@@ -217,3 +217,13 @@ def test_ctc_relocation_and_authorization_facts():
     assert _as_number("6 LPA", "Current CTC (in lakhs)") == "6"
     assert _as_number("6 LPA", "Current annual salary in INR") == "600000"
     assert _as_number("8-9 LPA", "Expected CTC") == "9"
+
+
+def test_current_location_questions_answered_with_city():
+    from app.api.extension import _location_part
+    loc = "Noida, Uttar Pradesh, India"
+    assert _location_part("What is your current location?", loc) == "Noida"
+    assert _location_part("Current Location", loc) == "Noida"
+    assert _location_part("Please select the city you are currently residing or willing to relocate to", loc) == "Noida"
+    assert _location_part("State", loc) == "Uttar Pradesh"
+    assert _location_part("Are you willing to relocate?", loc) is None

@@ -344,10 +344,17 @@ _IN_CITY_STATE = {
 _LOC_PART = re.compile(r"(?i)^(?:current |your |present )?(city|town|state|province|region|country)\b(?! code)")
 
 
+_WHERE_LIVE = re.compile(r"(?i)current(ly)?\s*(location|city|residing|based|staying|living)|where (are|do) you (currently )?"
+                         r"(live|reside|located|based|stay)|city (you are|you're) (currently )?(residing|living|based)|"
+                         r"residing (city|location)|present location")
+
+
 def _location_part(label: str, location: str) -> str | None:
     """City / State / Country questions, answered from the profile location ("Noida, Uttar Pradesh, India")."""
-    m = _LOC_PART.match(label.strip())
     parts = [x.strip() for x in (location or "").split(",") if x.strip()]
+    if parts and _WHERE_LIVE.search(label) and not re.search(r"(?i)\bstate\b|country|pin ?code|zip", label):
+        return parts[0]  # "What is your current location?" / "city you are currently residing…" → the city
+    m = _LOC_PART.match(label.strip())
     if not m or not parts:
         return None
     kind = m.group(1).lower()

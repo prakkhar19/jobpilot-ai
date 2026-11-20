@@ -164,7 +164,14 @@
     if (/\bApplied\b.{0,40}ago|Application submitted/i.test(text(document.querySelector("main") || document.body).slice(0, 4000))) {
       return log(`Already applied: ${d.title} @ ${d.company}`);
     }
-    const easy = findEasyApply();
+    const onApplyPath = /\/jobs\/view\/\d+\/apply\b/.test(location.pathname);
+    const easy = onApplyPath ? null : findEasyApply();
+    if (onApplyPath) {
+      // Opened LinkedIn's direct apply link (the button click didn't open the form): the form should be up.
+      const ev = await bg("api", { path: "/api/ext/evaluate", method: "POST", body: { platform: "linkedin", url: location.href.replace(/\/apply.*$/, "/"), ...d } });
+      if (ev.decision !== "apply") return bg("outcome", { outcome: "skipped" });
+      return finishEasy(ev, d, location.href.replace(/\/apply.*$/, "/"), true);
+    }
     const external = easy ? null : externalApply();
     if (!easy && !external) {
       await log(`Skip: ${d.title} @ ${d.company} — no Apply button (closed or already applied?)`);
@@ -187,9 +194,34 @@
       return;
     }
     await log(`Applying (${ev.score}): ${d.title} @ ${d.company}`);
-    const resume = await bg("resume", { jobId: ev.job_id });
     await log(`EASY-BTN ${easy.tagName} "${text(easy).slice(0, 40)}" aria=${(easy.getAttribute("aria-label") || "").slice(0, 60)} href=${(easy.getAttribute("href") || "").slice(0, 120)} inFrame=${easy.ownerDocument !== document}`);
     easy.click();
+    if (!(await waitFor(modal, 5000))) {
+      realClick(easy);
+      if (!(await waitFor(modal, 5000))) {
+        const id = (location.pathname.match(/\/jobs\/view\/(\d+)/) || [])[1];
+        if (id) {
+          await log("Easy Apply didn't open from the button — opening LinkedIn's apply link.");
+          location.href = `https://www.linkedin.com/jobs/view/${id}/apply/?openSDUIApplyFlow=true`;
+          return "navigated";
+        }
+      }
+    }
+    return finishEasy(ev, d, jobUrl, false);
+  }
+
+  // Pointer + mouse events with coordinates, for buttons that ignore a bare .click().
+  function realClick(el) {
+    const r = el.getBoundingClientRect();
+    const o = { bubbles: true, cancelable: true, composed: true, clientX: r.left + r.width / 2, clientY: r.top + r.height / 2, button: 0, view: el.ownerDocument.defaultView };
+    for (const t of ["pointerover", "pointerenter", "mouseover", "pointerdown", "mousedown", "pointerup", "mouseup", "click"]) {
+      el.dispatchEvent(t.startsWith("pointer") ? new PointerEvent(t, { ...o, pointerType: "mouse", isPrimary: true }) : new MouseEvent(t, o));
+    }
+  }
+
+  async function finishEasy(ev, d, jobUrl, viaLink) {
+    const resume = await bg("resume", { jobId: ev.job_id });
+    if (viaLink) await log(`Applying (${ev.score}) via the apply link: ${d.title} @ ${d.company}`);
     const res = await easyApply(ev.job_id, resume);
     await bg("api", { path: "/api/ext/result", method: "POST",
       body: { job_id: ev.job_id, outcome: res.outcome, note: res.note, missing: res.missing || [] } });
@@ -433,12 +465,13 @@
     if (!sent) await log(`No one to connect with at ${job.company} on this page.`);
   }
   // Runs last, so every const above is initialised before the page handlers use it.
+  let r;
   try {
     if (task.kind === "linkedin-search") await collectJobs(ctx);
-    else if (task.kind === "linkedin-job") await jobPage(ctx);
+    else if (task.kind === "linkedin-job") r = await jobPage(ctx);
     else if (task.kind === "linkedin-outreach") await outreach(ctx);
   } catch (e) {
     await log(`Error: ${e.message}`);
   }
-  bg("stepDone", task.kind === "linkedin-outreach" ? { outreachDone: task.job.jobId } : {});
+  if (r !== "navigated") bg("stepDone", task.kind === "linkedin-outreach" ? { outreachDone: task.job.jobId } : {});
 })();
