@@ -6,6 +6,31 @@
   window.__jpNaukri = true;
 
   await sleep(2500);
+
+  // Naukri's own "apply on company site" page (/myapply/showAcp) sits between the job and the employer: go through it.
+  if (/\/myapply\/showacp/i.test(location.pathname)) {
+    let hop;
+    try { hop = await bg("externalHop"); } catch (_) { return; }
+    if (!hop.active) return;
+    await sleep(1500);
+    await debugDump("naukri-acp");
+    const SOCIAL = /(^|\.)(naukri|naukimg|facebook|twitter|x|linkedin|instagram|youtube|google|apple|infoedge)\.(com|in)$/i;
+    const links = [...document.querySelectorAll("a[href]")].filter((a) => visible(a) && /^https?:/.test(a.href)
+      && !SOCIAL.test(new URL(a.href).hostname));
+    const go = links.find((a) => /apply|continue|proceed|company|visit|career|redirect/i.test(text(a) + " " + a.href)) || links[0];
+    const btn = byText("button, a, [role='button']", /continue|proceed|go to (the )?company|apply on company|visit (the )?(company|site|website)|redirect|^apply( now)?$/i);
+    if (go) {
+      await log(`→ company link on Naukri's page: ${go.href.split("?")[0].slice(0, 140)}`);
+      location.href = go.href;
+    } else if (btn) {
+      await log(`Clicking "${text(btn).slice(0, 40)}" on Naukri's company-site page`);
+      btn.click();
+    } else {
+      await log("Naukri's company-site page has nothing to click — see the DUMP lines.");
+    }
+    return;
+  }
+
   let ctx;
   try { ctx = await bg("getTask"); } catch (_) { return; }
   if (!ctx || !ctx.task) return;

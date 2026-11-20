@@ -86,7 +86,20 @@ chrome.tabs.onUpdated.addListener(async (tabId, info, tab) => {
   if (/^https?:/.test(url)) external.url = url;
   if (info.status === "complete") {
     clearTimeout(settleTimer); // redirects (tracking links, career-site hops) keep resetting this
-    settleTimer = setTimeout(() => { if (external) external.done = true; }, 3000);
+    settleTimer = setTimeout(async () => {
+      if (!external) return;
+      external.done = true;
+      if (external.awaiting || !external.job?.jobId || !/^https?:/.test(external.url) || JOB_BOARDS.test(external.url)) return;
+      const ex = external;
+      external = null;
+      chrome.tabs.remove(ex.tab).catch(() => {});
+      const s = await state();
+      const steps = [...s.steps];
+      steps[s.stepIndex] = { kind: "ats", url: ex.url, jobId: ex.job.jobId, label: `${ex.job.company}: ${ex.job.title}` };
+      await set({ steps, stepStartedAt: Date.now() });
+      await log(`Company site: ${new URL(ex.url).hostname} — applying there.`);
+      await ensureWorkerTab(ex.url);
+    }, 3000);
   }
 });
 
@@ -339,7 +352,13 @@ async function handle(msg, sender) {
       external = { opener: tabId, tab: null, url: "", done: false, at: Date.now(), job: msg.job || null };
       return {};
     }
+    case "externalHop": {
+      const s = await state();
+      const active = !!(external && !external.done && external.opener === tabId && tabId === s.workerTabId);
+      return { active, job: active ? external.job : null };
+    }
     case "awaitExternal": {
+      if (external) external.awaiting = true;
       const until = Date.now() + (msg.timeoutMs || 20000);
       while (Date.now() < until && !(external && external.done)) await new Promise((r) => setTimeout(r, 500));
       const got = external;
