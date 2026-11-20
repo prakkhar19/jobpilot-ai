@@ -413,6 +413,8 @@
         // The step didn't move on (an unanswered or rejected field): hand it to you instead of looping.
         stuck += 1;
         if (stuck >= 2) {
+          const fs = collectFields(modal());
+          await log(`EASY-STUCK btn="${text(btn)}" fields=${fs.length} [${fs.map((f) => `${f.label}=${String(f.el?.value || "").slice(0, 20)}`).join("; ").slice(0, 500)}] panel="${text(modal()).slice(0, 700)}"`);
           const empty = collectFields(modal()).filter((f) => f.type !== "file" && !String(f.el?.value || "").trim()).map((f) => f.label).filter(Boolean);
           await discard();
           return { outcome: "needs_you", missing: [...new Set(empty)].slice(0, 8).concat(empty.length ? [] : ["A step of the Easy Apply form"]),
