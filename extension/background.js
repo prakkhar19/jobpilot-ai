@@ -494,13 +494,16 @@ chrome.tabs.onRemoved.addListener(async (tabId) => {
 });
 
 // Self-update for the unpacked install: when version.txt on disk changes (code was updated), reload the extension.
-let loadedVersion = null;
+// The version that was loaded is kept in storage.session (cleared on every reload), not in a variable: Chrome stops
+// and restarts this service worker whenever it's idle, and a variable would pick up the new version unseen.
 async function checkVersion() {
   try {
     const v = (await (await fetch(chrome.runtime.getURL("version.txt"), { cache: "no-store" })).text()).trim();
-    if (loadedVersion === null) loadedVersion = v;
+    const { loadedVersion } = await chrome.storage.session.get("loadedVersion");
+    if (!loadedVersion) await chrome.storage.session.set({ loadedVersion: v });
     else if (v !== loadedVersion) {
       await log("Code updated — reloading extension.");
+      await flushLog().catch(() => {});
       chrome.runtime.reload();
     }
   } catch (_) { /* ignore */ }
