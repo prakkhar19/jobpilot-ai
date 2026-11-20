@@ -104,7 +104,33 @@ def test_queue_lists_company_board_jobs(client, anon):
                                                  "url": job["url"]})
     client.post("/api/jobs/rematch")
     q = anon.get("/api/ext/queue", headers=h).json()
-    assert any("greenhouse" in i["url"] for i in q)
+    assert any("greenhouse" in i["url"] and i["kind"] == "ats" for i in q)
+
+
+def test_queue_step_kinds():
+    from types import SimpleNamespace as J
+
+    from app.api.extension import queue_step
+
+    assert queue_step(J(official_url="https://jobs.lever.co/acme/1", application_url="", posting_url="x")) == {
+        "kind": "ats", "url": "https://jobs.lever.co/acme/1"}
+    assert queue_step(J(official_url="", application_url="", posting_url="https://www.linkedin.com/comm/jobs/view/42?trk=x")
+                      ) == {"kind": "linkedin-job", "url": "https://www.linkedin.com/jobs/view/42/"}
+    assert queue_step(J(official_url="", application_url="", posting_url="https://www.naukri.com/job-listings-ai-eng-acme-1-3-years-120"
+                        "1126001234?src=alert"))["kind"] == "naukri-job"
+    assert queue_step(J(official_url="", application_url="", posting_url="https://www.naukri.com/jd/job-listings-x-acme-2-to-5-years-"
+                        "171126032890?u=1")) == {"kind": "naukri-job",
+                                                 "url": "https://www.naukri.com/job-listings-x-acme-2-to-5-years-171126032890"}
+    assert queue_step(J(official_url="", application_url="", posting_url="https://careers.example.com/jobs/1")) is None
+
+
+def test_result_records_company_site_url(client, anon):
+    h = _ext(client, anon)
+    ev = anon.post("/api/ext/evaluate", json=_job(), headers=h).json()
+    r = anon.post("/api/ext/result", headers=h, json={"job_id": ev["job_id"], "outcome": "needs_you",
+                  "missing": ["Apply on careers.example.com"], "apply_url": "https://careers.example.com/apply/9"})
+    assert r.status_code == 200 and r.json()["status"] == "needs_input"
+    assert client.get(f"/api/jobs/{ev['job_id']}").json()["official_url"] == "https://careers.example.com/apply/9"
 
 
 def test_notice_period_buttons(client, anon):

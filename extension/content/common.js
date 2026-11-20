@@ -213,6 +213,35 @@
     for (const l of lines) await log(l.slice(0, 480));
   }
 
+  // "Apply on company site": click through to the employer. If it's an application system JobPilot can fill in
+  // (Greenhouse, Lever, Ashby, Workable, SmartRecruiters) the job is queued to be applied to there, next; otherwise
+  // it goes to "Needs you" with the employer's link. If the click navigates this tab instead, background.js takes over.
+  async function viaCompanySite(button, ev, d, platform, jobUrl) {
+    const job = { jobId: ev.job_id, title: d.title, company: d.company };
+    await log(`Applying (${ev.score}) on the company site: ${d.title} @ ${d.company}`);
+    await bg("expectExternal", { job });
+    button.click();
+    await sleep(2500);
+    // LinkedIn sometimes asks first ("Continue to the company site" / share profile).
+    const dlg = [...document.querySelectorAll("[role='dialog'], .artdeco-modal")].find(visible);
+    const cont = dlg && byText("button, a", /^(continue|continue applying|continue to (the )?(company )?(site|website)|apply)$/i, dlg);
+    if (cont) cont.click();
+    const ext = await bg("awaitExternal", { timeoutMs: 25000 });
+    const host = (() => { try { return new URL(ext.url).hostname; } catch (_) { return ""; } })();
+    if (ext.supported) {
+      await bg("insertSteps", { steps: [{ kind: "ats", url: ext.url, jobId: ev.job_id, label: `${d.company}: ${d.title} (${ev.score})` }] });
+      await log(`→ ${host}: applying there next.`);
+      return { outcome: "queued" };
+    }
+    const missing = [host ? `Apply on ${host} (resume is ready in JobPilot)` : "Apply on the company site (resume is ready in JobPilot)"];
+    await bg("api", { path: "/api/ext/result", method: "POST", body: { job_id: ev.job_id, outcome: "needs_you", apply_url: ext.url || "",
+      note: host ? `Applies on ${host}, which JobPilot can't fill in yet.` : "The company-site link didn't open.", missing } });
+    await bg("outcome", { outcome: "needs_you", jobId: ev.job_id, title: d.title, company: d.company, url: ext.url || jobUrl,
+      missing, platform });
+    await log(`✋ Needs you: ${d.title} @ ${d.company} — ${host ? `applies on ${host}` : "company-site link didn't open"}`);
+    return { outcome: "needs_you" };
+  }
+
   window.JP = { debugDump, sleep, pause, waitFor, text, visible, byText, bg, log, setValue, setFile, labelFor, collectFields,
-    isEmpty, fillField, answerAndFill, hasCaptcha };
+    isEmpty, fillField, answerAndFill, hasCaptcha, viaCompanySite };
 })();

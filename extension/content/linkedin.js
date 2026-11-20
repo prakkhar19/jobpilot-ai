@@ -106,6 +106,14 @@
     }
   }
 
+  // LinkedIn's non-Easy-Apply button ("Apply", "Apply on company website"), which opens the employer's site.
+  function externalApply() {
+    const root = document.querySelector(".jobs-apply-button--top-card, .jobs-s-apply, .job-details-jobs-unified-top-card__container--two-pane, main") || document;
+    return byText("button, a", /^Apply( on company (website|site))?$/i, root)
+      || [...root.querySelectorAll("button[aria-label], a[aria-label]")].find((b) => visible(b)
+        && /^Apply\b/i.test(b.getAttribute("aria-label")) && /company|website|on .+ site/i.test(b.getAttribute("aria-label")));
+  }
+
   function topCard() {
     const title = text(document.querySelector(".job-details-jobs-unified-top-card__job-title h1, .job-details-jobs-unified-top-card__job-title, .jobs-unified-top-card__job-title, h1"));
     const company = text(document.querySelector(".job-details-jobs-unified-top-card__company-name a, .job-details-jobs-unified-top-card__company-name, .jobs-unified-top-card__company-name a, a[href*='/company/'] span, a[href*='/company/']"));
@@ -130,8 +138,9 @@
       return log(`Already applied: ${d.title} @ ${d.company}`);
     }
     const easy = findEasyApply();
-    if (!easy) {
-      await log(`Skip: ${d.title} @ ${d.company} — not Easy Apply (applies on company site)`);
+    const external = easy ? null : externalApply();
+    if (!easy && !external) {
+      await log(`Skip: ${d.title} @ ${d.company} — no Apply button (closed or already applied?)`);
       return bg("outcome", { outcome: "skipped" });
     }
     const jobUrl = location.href.split("?")[0];
@@ -139,6 +148,10 @@
     if (ev.decision !== "apply") {
       await log(`Skip: ${d.title} @ ${d.company} — ${ev.reason}`);
       return bg("outcome", { outcome: "skipped" });
+    }
+    if (!easy) {
+      await window.JP.viaCompanySite(external, ev, d, "linkedin", jobUrl);
+      return;
     }
     await log(`Applying (${ev.score}): ${d.title} @ ${d.company}`);
     const resume = await bg("resume", { jobId: ev.job_id });
@@ -179,9 +192,15 @@
 
       const easy = findEasyApply();
       if (!easy) {
-        const ext = byText("button, a", /^Apply( on company website)?$/i);
-        await log(`Skip: ${d.title} @ ${d.company} — ${ext ? "applies on company site, not Easy Apply" : "no Easy Apply button found"}`);
-        await bg("outcome", { outcome: "skipped" });
+        // The one-page search flow only does Easy Apply; company-site jobs are handled on their own job page.
+        const ext = externalApply();
+        if (ext && jid) {
+          await bg("insertSteps", { steps: [{ kind: "linkedin-job", url: jobUrl, label: `LinkedIn job ${jid} (company site)` }] });
+          await log(`${d.title} @ ${d.company} applies on the company site — queued.`);
+        } else {
+          await log(`Skip: ${d.title} @ ${d.company} — no Apply button found`);
+          await bg("outcome", { outcome: "skipped" });
+        }
         continue;
       }
 

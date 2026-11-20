@@ -413,11 +413,15 @@ class ResultIn(BaseModel):
     outcome: Literal["submitted", "needs_you", "failed"]
     note: str = Field(default="", max_length=2000)
     missing: list[str] = Field(default_factory=list, max_length=60)
+    # The employer's own application page, when the extension followed "Apply on company site" to it.
+    apply_url: str = Field(default="", max_length=1000)
 
 
 @router.post("/result")
 def result(body: ResultIn, db: DB, user: ExtUser) -> dict:
     job = get_owned_or_404(db, Job, body.job_id, user, "Job")
+    if body.apply_url.startswith(("https://", "http://")) and not job.official_url:
+        job.official_url = job.application_url = body.apply_url
     app, _ = svc.get_or_create(db, user, job, actor="agent")
     if body.outcome == "submitted":
         if app.status not in svc.POST_SUBMISSION:
@@ -502,11 +506,32 @@ def outreach_log(body: OutreachLogIn, db: DB, user: ExtUser) -> None:
 # ----------------------------------------------------------------------------- company career-page queue
 
 _ATS = re.compile(r"(?i)greenhouse\.io|lever\.co|ashbyhq\.com|workable\.com|smartrecruiters\.com")
+_LINKEDIN_JOB = re.compile(r"(?i)^https://(www\.)?linkedin\.com/(comm/)?jobs/view/(\d+)")
+_NAUKRI_JOB = re.compile(r"(?i)^https://(www\.)?naukri\.com/(jd/)?(job-listings-[^?#\s]+)")
+
+
+def queue_step(job: Job) -> dict | None:
+    """How the extension should apply to this job: on the company page, or via its LinkedIn/Naukri page
+    (which follows "Apply on company site" when there's no in-site apply)."""
+    official = job.official_url or ""
+    if _ATS.search(official):
+        return {"kind": "ats", "url": official}
+    url = job.application_url or job.posting_url or ""
+    if _ATS.search(url):
+        return {"kind": "ats", "url": url}
+    m = _LINKEDIN_JOB.match(url)
+    if m:
+        return {"kind": "linkedin-job", "url": f"https://www.linkedin.com/jobs/view/{m.group(3)}/"}
+    m = _NAUKRI_JOB.match(url)
+    if m:
+        return {"kind": "naukri-job", "url": f"https://www.naukri.com/{m.group(3)}"}
+    return None
 
 
 @router.get("/queue")
 def queue(db: DB, user: ExtUser, limit: int = 30) -> list[dict]:
-    """Best unapplied jobs JobPilot discovered on company boards, for the extension to apply on the employer's page."""
+    """Best unapplied jobs JobPilot already found and scored (company boards and job-alert emails), for the
+    extension to apply to first."""
     from app.api.apply_queue import _queue_rows
 
     cfg = get_config(db, user.id)
@@ -514,11 +539,10 @@ def queue(db: DB, user: ExtUser, limit: int = 30) -> list[dict]:
     for job, score, app in _queue_rows(db, user, cfg.min_match_score):
         if app is not None and app.status == "needs_input":
             continue
-        url = job.official_url or job.application_url or job.posting_url or ""
-        if not _ATS.search(url):
+        step = queue_step(job)
+        if step is None:
             continue
-        out.append({"job_id": str(job.id), "title": job.title, "company": job.company, "url": url,
-                    "score": round(score, 1)})
+        out.append({"job_id": str(job.id), "title": job.title, "company": job.company, "score": round(score, 1), **step})
         if len(out) >= max(1, min(limit, 100)):
             break
     return out

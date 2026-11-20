@@ -90,10 +90,8 @@
       return bg("outcome", { outcome: "skipped" });
     }
     if (!apply && companySite) {
-      await bg("api", { path: "/api/ext/result", method: "POST", body: { job_id: ev.job_id, outcome: "needs_you",
-        note: "Naukri sends this one to the company's own site.", missing: ["Apply on the company site"] } });
-      return bg("outcome", { outcome: "needs_you", jobId: ev.job_id, title: d.title, company: d.company,
-        url: location.href, missing: ["Apply on the company site (resume is ready in JobPilot)"] });
+      await window.JP.viaCompanySite(companySite, ev, d, "naukri", location.href.split("?")[0]);
+      return;
     }
 
     await log(`Applying (${ev.score}): ${d.title} @ ${d.company}`);

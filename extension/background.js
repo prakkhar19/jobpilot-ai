@@ -29,6 +29,48 @@ const DEFAULTS = {
 const STEP_TIMEOUT_MIN = { "linkedin-search": 3, "linkedin-job": 5, "naukri-search": 3, "naukri-job": 4, "instahyre": 20, ats: 5,
   "linkedin-outreach": 6 };
 
+// Employer application systems the ats.js content script can fill in (keep in sync with manifest.json).
+const SUPPORTED_ATS = /^https:\/\/([a-z0-9-]+\.)*(greenhouse\.io|lever\.co|ashbyhq\.com|workable\.com|smartrecruiters\.com)\//i;
+let external = null; // { opener, tab, url, done, at } while following an "Apply on company site" click
+
+chrome.tabs.onCreated.addListener((tab) => {
+  if (external && !external.done && tab.openerTabId === external.opener && external.tab == null) external.tab = tab.id;
+});
+let settleTimer = null;
+const JOB_BOARDS = /^https:\/\/([a-z0-9-]+\.)*(linkedin\.com|naukri\.com)\//i;
+chrome.tabs.onUpdated.addListener(async (tabId, info, tab) => {
+  // Same-tab case: the job page itself navigated to the employer, so its content script is gone. Take over here.
+  if (external && !external.done && external.tab == null && tabId === external.opener && info.url
+      && /^https?:/.test(info.url) && !JOB_BOARDS.test(info.url)) {
+    const ex = external;
+    external = null;
+    const s = await state();
+    const job = ex.job || {};
+    if (SUPPORTED_ATS.test(info.url) && job.jobId) {
+      const steps = [...s.steps];
+      steps[s.stepIndex] = { kind: "ats", url: info.url, jobId: job.jobId, label: `${job.company}: ${job.title}` };
+      await set({ steps, stepStartedAt: Date.now() }); // ats.js on the employer page picks this up
+      await log(`Company site: ${new URL(info.url).hostname} — applying there.`);
+    } else if (job.jobId) {
+      await log(`Company site ${new URL(info.url).hostname} isn't one JobPilot can fill in yet — added to Needs you.`);
+      await api("/api/ext/result", { method: "POST", body: { job_id: job.jobId, outcome: "needs_you", apply_url: info.url,
+        note: "Applies on the employer's own site.", missing: ["Apply on the company site (resume is ready in JobPilot)"] } }).catch(() => {});
+      await handle({ type: "outcome", outcome: "needs_you", jobId: job.jobId, title: job.title, company: job.company,
+        url: info.url, missing: ["Apply on the company site"], platform: "company" }, {});
+      await set({ workerTabId: null }); // leave that page open for you
+      advance();
+    }
+    return;
+  }
+  if (!external || external.done || tabId !== external.tab) return;
+  const url = info.url || tab.url || tab.pendingUrl || "";
+  if (/^https?:/.test(url)) external.url = url;
+  if (info.status === "complete") {
+    clearTimeout(settleTimer); // redirects (tracking links, career-site hops) keep resetting this
+    settleTimer = setTimeout(() => { if (external) external.done = true; }, 3000);
+  }
+});
+
 const get = (keys) => chrome.storage.local.get(keys);
 const set = (obj) => chrome.storage.local.set(obj);
 
@@ -116,13 +158,26 @@ async function buildSteps() {
   await set({ stats: s.stats, lastConfig: cfg });
   const p = s.settings.platforms;
   const steps = [];
+  // Jobs JobPilot already found and scored (company boards + LinkedIn/Naukri alert emails) go first.
+  if (p.company) {
+    try {
+      const q = await api(`/api/ext/queue?limit=${Math.max(5, s.settings.dailyCap)}`);
+      const allowed = { ats: true, "linkedin-job": p.linkedin, "naukri-job": p.naukri };
+      for (const j of q) {
+        const kind = j.kind || "ats";
+        if (!allowed[kind]) continue;
+        steps.push({ kind, url: j.url, jobId: j.job_id, label: `${j.company}: ${j.title} (${j.score})` });
+      }
+      await log(`Already-matched jobs to apply to first: ${steps.length}.`);
+    } catch (e) { await log(`Matched-jobs queue: ${e.message}`); }
+  }
   const targets = searchTargets(cfg);
   if (!targets.length) await log("No target roles set — add them in JobPilot → Agent settings (or a profile headline).");
   for (const t of targets) {
     if (p.linkedin) {
       for (let page = 0; page < s.settings.pagesPerSearch; page++) {
-        // f_AL = Easy Apply only, f_TPR = past 24h, f_WT=2 remote.
-        let url = `https://www.linkedin.com/jobs/search/?keywords=${enc(t.role)}&location=${enc(t.location)}&f_AL=true&f_TPR=r86400&sortBy=DD&start=${page * 25}`;
+        // f_TPR = past 24h, f_WT=2 remote. Not limited to Easy Apply: company-site jobs are followed to the employer.
+        let url = `https://www.linkedin.com/jobs/search/?keywords=${enc(t.role)}&location=${enc(t.location)}&f_TPR=r86400&sortBy=DD&start=${page * 25}`;
         if (t.remote) url += "&f_WT=2";
         steps.push({ kind: "linkedin-search", url, label: `LinkedIn: ${t.role} · ${t.remote ? "Remote" : t.location}` });
       }
@@ -134,12 +189,6 @@ async function buildSteps() {
     }
   }
   if (p.instahyre) steps.push({ kind: "instahyre", url: "https://www.instahyre.com/candidate/opportunities/?matching=true", label: "Instahyre matches" });
-  if (p.company) {
-    try {
-      const q = await api(`/api/ext/queue?limit=${Math.max(5, s.settings.dailyCap)}`);
-      for (const j of q) steps.push({ kind: "ats", url: j.url, jobId: j.job_id, label: `${j.company}: ${j.title} (${j.score})` });
-    } catch (e) { await log(`Company queue: ${e.message}`); }
-  }
   if (s.settings.outreach) {
     for (const job of s.outreachQueue.slice(0, 10)) {
       steps.push({ kind: "linkedin-outreach", job, label: `Outreach: ${job.company}`,
@@ -257,6 +306,22 @@ async function handle(msg, sender) {
       }
       return { stop: !s.running || s.stats.applied >= s.settings.dailyCap,
         remaining: s.settings.dailyCap - s.stats.applied, outreachLeft: s.settings.outreachCap - s.stats.outreach };
+    }
+
+    // "Apply on company site": the content script announces the click, we catch the tab it opens (or the worker tab
+    // leaving the job board), wait for redirects to settle, close the extra tab and report the employer's URL.
+    case "expectExternal": {
+      external = { opener: tabId, tab: null, url: "", done: false, at: Date.now(), job: msg.job || null };
+      return {};
+    }
+    case "awaitExternal": {
+      const until = Date.now() + (msg.timeoutMs || 20000);
+      while (Date.now() < until && !(external && external.done)) await new Promise((r) => setTimeout(r, 500));
+      const got = external;
+      external = null;
+      if (got?.tab != null) chrome.tabs.remove(got.tab).catch(() => {});
+      const url = got?.url || "";
+      return { url, supported: SUPPORTED_ATS.test(url) };
     }
 
     // Remember a click on Apply so the next page (after a redirect) can confirm it.
