@@ -67,7 +67,7 @@
     }
     const by = el.getAttribute("aria-labelledby");
     if (by) {
-      const t = by.split(/\s+/).map((id) => text(document.getElementById(id))).join(" ");
+      const t = by.split(/\s+/).map((id) => text(el.ownerDocument.getElementById(id))).join(" ");
       if (t.trim()) return clean(t);
     }
     if (el.getAttribute("aria-label")) return clean(el.getAttribute("aria-label"));
@@ -97,7 +97,7 @@
     const rg = el.closest("[role='radiogroup'], [role='group']");
     const by = rg?.getAttribute("aria-labelledby");
     if (by) {
-      const t = clean(by.split(/\s+/).map((id) => text(document.getElementById(id))).join(" "));
+      const t = clean(by.split(/\s+/).map((id) => text(rg.ownerDocument.getElementById(id))).join(" "));
       if (t) return t;
     }
     if (rg?.getAttribute("aria-label")) return clean(rg.getAttribute("aria-label"));

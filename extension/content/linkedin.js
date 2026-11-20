@@ -35,9 +35,18 @@
     return id || (href.match(/\/jobs\/view\/(\d+)/) || href.match(/currentJobId=(\d+)/) || [])[1] || "";
   }
   // querySelectorAll that also looks inside open shadow roots (LinkedIn's newer pages use them).
+  // Also looks inside same-origin iframes: LinkedIn now renders much of the job page (and the Easy Apply form) in
+  // an embedded "/preload/" frame.
   function deepAll(root, sel) {
     const out = [...root.querySelectorAll(sel)];
-    root.querySelectorAll("*").forEach((e) => { if (e.shadowRoot) out.push(...deepAll(e.shadowRoot, sel)); });
+    root.querySelectorAll("*").forEach((e) => {
+      if (e.shadowRoot) out.push(...deepAll(e.shadowRoot, sel));
+      if (e.tagName === "IFRAME") {
+        let d = null;
+        try { d = e.contentDocument; } catch (_) { /* cross-origin */ }
+        if (d && d.body && visible(e)) out.push(...deepAll(d, sel));
+      }
+    });
     return out;
   }
 
@@ -339,17 +348,17 @@
 
   async function closeModal() {
     await sleep(1500);
-    const x = [...document.querySelectorAll("button[aria-label='Dismiss'], button[aria-label='Done']")].find(visible)
+    const x = deepAll(document, "button[aria-label='Dismiss'], button[aria-label='Done']").find(visible)
       || byText("button", /^(Done|Not now)$/i);
     if (x) x.click();
     await sleep(800);
   }
 
   async function discard() {
-    const x = [...document.querySelectorAll("button[aria-label='Dismiss']")].find(visible);
+    const x = deepAll(document, "button[aria-label='Dismiss']").find(visible);
     if (x) x.click();
-    const confirm = await waitFor(() => document.querySelector("button[data-control-name='discard_application_confirm_btn']")
-      || byText("button", /^Discard$/i), 5000);
+    const confirm = await waitFor(() => deepAll(document, "button[data-control-name='discard_application_confirm_btn']")[0]
+      || deepAll(document, "button").find((b) => visible(b) && /^Discard$/i.test(text(b))), 5000);
     if (confirm) confirm.click();
     await sleep(1200);
   }
