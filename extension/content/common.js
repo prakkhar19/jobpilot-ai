@@ -101,6 +101,21 @@
       if (t) return t;
     }
     if (rg?.getAttribute("aria-label")) return clean(rg.getAttribute("aria-label"));
+    // LinkedIn puts the question in each radio's own aria-label ("Are you comfortable commuting…? Yes").
+    const al = clean(el.getAttribute("aria-label"));
+    if (al && !optText.has(al.toLowerCase())) {
+      let q = al;
+      for (const o of [...optText].sort((a, b) => b.length - a.length)) {
+        if (o && q.toLowerCase().endsWith(o)) { q = q.slice(0, q.length - o.length); break; }
+      }
+      q = q.replace(/[\s:,-]+$/, "").trim();
+      if (q.length >= 5) return q.slice(0, 300);
+    }
+    // A question written just before the group's box (no legend / labelling).
+    const holder = el.closest("fieldset, [role='radiogroup']");
+    let prev = holder?.previousElementSibling;
+    for (let i = 0; prev && i < 3 && !text(prev); i++) prev = prev.previousElementSibling;
+    if (prev && text(prev) && !optText.has(clean(text(prev)).toLowerCase()) && text(prev).length < 300) return clean(text(prev));
     let box = el.parentElement;
     while (box && box !== root && !group.every((r) => box.contains(r))) box = box.parentElement;
     for (let i = 0; box && i < 9; i++, box = box.parentElement) {
