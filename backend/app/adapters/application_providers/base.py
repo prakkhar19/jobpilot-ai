@@ -76,11 +76,24 @@ _FACT_INTENTS = [
     (re.compile(r"(?i)(legally )?(authori[sz]ed|eligible|right) to work"), ("work authorization", "work authorisation", "authorized to work", "right to work")),
     (re.compile(r"(?i)sponsor"), ("sponsorship", "visa sponsorship", "require sponsorship")),
     (re.compile(r"(?i)notice period|start date|when can you start|availability"), ("notice period", "availability", "start date")),
-    (re.compile(r"(?i)salary|compensation expectation|expected (ctc|compensation)"), ("salary expectation", "expected salary", "compensation")),
+    (re.compile(r"(?i)(current|present|existing|last drawn)\s*(annual\s*)?(ctc|salary|compensation|package|fixed)|ctc.{0,20}current"),
+     ("current ctc", "current salary", "current compensation")),
+    (re.compile(r"(?i)salary|compensation expectation|(expected|desired)\s*(annual\s*)?(ctc|compensation|package)|\bectc\b"),
+     ("expected ctc", "salary expectation", "expected salary", "compensation")),
     (re.compile(r"(?i)relocat"), ("relocation", "willing to relocate")),
     (re.compile(r"(?i)pronoun"), ("pronouns",)),
     (re.compile(r"(?i)how did you hear"), ("how did you hear", "referral source")),
 ]
+
+
+def yes_no_of(value: str) -> str:
+    """'yes' / 'no' when a fact reads as one ("Indian citizen" → yes for "authorized to work?"), else ''."""
+    v = value.strip().lower()
+    if re.match(r"^(yes|y|true)\b", v) or re.search(r"\bcitizen\b|\bauthori[sz]ed\b|\bwilling\b|\bpermanent resident\b", v):
+        return "yes"
+    if re.match(r"^(no|n|false)\b", v):
+        return "no"
+    return ""
 
 
 def map_candidate_data(fields: list[FormField], profile: dict, answer_bank: dict[str, str],
@@ -127,8 +140,9 @@ def map_candidate_data(fields: list[FormField], profile: dict, answer_bank: dict
         if value and f.options:
             # Only accept a value that is one of the allowed options (case-insensitive).
             opt = next((o for o in f.options if o.lower() == value.lower()), None)
-            if opt is None:
-                opt = next((o for o in f.options if value.lower() in ("yes", "no") and o.lower().startswith(value.lower())), None)
+            yes_no = yes_no_of(value)
+            if opt is None and yes_no:
+                opt = next((o for o in f.options if o.strip().lower().startswith(yes_no)), None)
             value = opt or ""
         if value:
             answers[f.name] = {"value": value, "source": source}

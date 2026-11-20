@@ -200,3 +200,20 @@ def test_single_name_uses_last_name_fact():
     assert got["ln"]["value"] == "Prakhar" and got["fn"]["value"] == "Prakhar" and not missing
     _, missing = map_candidate_data(fields[:1], {"full_name": "Prakhar"}, {})
     assert missing  # never invented without the fact
+
+
+def test_ctc_relocation_and_authorization_facts():
+    from app.adapters.application_providers.base import FormField, map_candidate_data
+    from app.api.extension import _as_number
+
+    facts = {"Current CTC": "6 LPA", "Expected CTC": "8-9 LPA", "Willing to relocate": "Yes", "Work authorization": "Indian citizen"}
+    F = lambda n, label, opts=None: FormField(name=n, label=label, type="select" if opts else "text", required=True, options=opts or [])  # noqa: E731
+    got, missing = map_candidate_data([F("c", "Current CTC"), F("e", "Expected CTC (LPA)"), F("s", "Expected salary"),
+                                       F("r", "Are you willing to relocate?", ["Yes", "No"]),
+                                       F("w", "Are you legally authorized to work in India?", ["Yes", "No"])],
+                                      {"full_name": "Prakhar", "application_facts": facts}, {})
+    assert {k: v["value"] for k, v in got.items()} == {"c": "6 LPA", "e": "8-9 LPA", "s": "8-9 LPA", "r": "Yes", "w": "Yes"}
+    assert not missing
+    assert _as_number("6 LPA", "Current CTC (in lakhs)") == "6"
+    assert _as_number("6 LPA", "Current annual salary in INR") == "600000"
+    assert _as_number("8-9 LPA", "Expected CTC") == "9"

@@ -358,6 +358,18 @@ def _location_part(label: str, location: str) -> str | None:
     return _IN_CITY_STATE.get(parts[0].lower())
 
 
+def _as_number(value: str, label: str) -> str | None:
+    """Number-only inputs: "6 LPA" → "6" (lakhs) or "600000" when the field asks for rupees; "8-9 LPA" → the top."""
+    nums = [float(x) for x in re.findall(r"\d+(?:\.\d+)?", value.replace(",", ""))]
+    if not nums:
+        return None
+    n = max(nums)
+    lakhs = re.search(r"(?i)lpa|lakh|lac\b", value)
+    if lakhs and re.search(r"(?i)rupee|inr|₹|\bper annum\b|\bp\.?a\.?\b|annual", label) and not re.search(r"(?i)lakh|lac|lpa", label):
+        n *= 100000
+    return str(int(n)) if n == int(n) else str(n)
+
+
 def _derived_answer(f: FieldIn, p: dict, years: float | None) -> str | None:
     """Answers that follow directly from the verified profile: years of experience, 'do you know X' questions,
     city/state/country."""
@@ -415,6 +427,8 @@ def answers(body: AnswersIn, db: DB, user: ExtUser) -> dict:
         v = (_pick(f.options, loc) if f.options else loc) if loc else (mapped.get(f.key) or {}).get("value")
         if not v:
             v = _derived_answer(f, p, years)
+        if v and f.type == "number":
+            v = _as_number(v, f.label)
         if not v and f.options and re.search(r"(?i)notice|join|start", f.label):
             v = _notice_option(f.options, p)
         if not v and f.type == "textarea" or (not v and f.type == "text" and len(f.label) > 40):
