@@ -26,7 +26,7 @@ const DEFAULTS = {
   log: [],
 };
 
-const STEP_TIMEOUT_MIN = { "linkedin-search": 3, "linkedin-job": 5, "naukri-search": 3, "naukri-job": 4, "instahyre": 20, ats: 12,
+const STEP_TIMEOUT_MIN = { "linkedin-search": 3, "linkedin-job": 5, "naukri-search": 3, "naukri-job": 4, "instahyre": 20, ats: 8,
   "linkedin-outreach": 6 };
 
 let external = null; // { opener, tab, url, done, at } while following an "Apply on company site" click
@@ -609,6 +609,11 @@ chrome.alarms.onAlarm.addListener(async (a) => {
     const limit = (STEP_TIMEOUT_MIN[step.kind] || 10) * 60000;
     if (Date.now() - s.stepStartedAt > limit) {
       await log(`Timed out on ${step.label}; moving on.`);
+      if (step.kind === "ats" && step.jobId) {
+        // Don't retry it every cycle: leave it in Needs you.
+        await api("/api/ext/result", { method: "POST", body: { job_id: step.jobId, outcome: "needs_you",
+          note: "The company site took too long.", missing: ["The company site took too long — finish it there"] } }).catch(() => {});
+      }
       advance();
     }
   }

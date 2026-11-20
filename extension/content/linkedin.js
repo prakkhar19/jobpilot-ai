@@ -40,7 +40,10 @@
   function deepAll(root, sel) {
     const out = [...root.querySelectorAll(sel)];
     root.querySelectorAll("*").forEach((e) => {
-      if (e.shadowRoot) out.push(...deepAll(e.shadowRoot, sel));
+      // Closed shadow roots too (LinkedIn's "interop-shadowdom" host): only extensions can open those.
+      let sr = e.shadowRoot;
+      if (!sr && chrome.dom?.openOrClosedShadowRoot) { try { sr = chrome.dom.openOrClosedShadowRoot(e); } catch (_) { sr = null; } }
+      if (sr) out.push(...deepAll(sr, sel));
       if (e.tagName === "IFRAME") {
         let d = null;
         try { d = e.contentDocument; } catch (_) { /* cross-origin */ }
@@ -199,12 +202,10 @@
     if (!(await waitFor(modal, 5000))) {
       realClick(easy);
       if (!(await waitFor(modal, 5000))) {
-        const id = (location.pathname.match(/\/jobs\/view\/(\d+)/) || [])[1];
-        if (id) {
-          await log("Easy Apply didn't open from the button — opening LinkedIn's apply link.");
-          location.href = `https://www.linkedin.com/jobs/view/${id}/apply/?openSDUIApplyFlow=true`;
-          return "navigated";
-        }
+        const host = document.querySelector("[data-testid='interop-shadowdom']");
+        let sr = null;
+        try { sr = host && chrome.dom?.openOrClosedShadowRoot(host); } catch (_) { /* ignore */ }
+        await log(`EASY-SHADOW host=${!!host} root=${!!sr} kids=${sr ? sr.childElementCount : 0} text="${sr ? text(sr).slice(0, 200) : ""}"`);
       }
     }
     return finishEasy(ev, d, jobUrl, false);
