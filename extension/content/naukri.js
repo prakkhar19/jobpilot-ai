@@ -1,7 +1,7 @@
 // Naukri: the search page queues each job page; each job page is evaluated and applied to, answering the
 // recruiter's questionnaire (chat drawer) from the profile/answer bank.
 (async () => {
-  const { sleep, pause, waitFor, text, visible, byText, bg, log, setValue } = window.JP;
+  const { sleep, pause, waitFor, text, visible, byText, bg, log, setValue, debugDump } = window.JP;
   if (window.__jpNaukri) return;
   window.__jpNaukri = true;
 
@@ -15,6 +15,26 @@
     await log("Naukri needs you to log in. Log in to Naukri in this Chrome, then press Start again.");
     return bg("stepDone", { keepTab: true });
   }
+
+  // Did we just click Apply and get redirected to a confirmation page?
+  try {
+    const { pending } = await bg("getPending");
+    if (pending && pending.platform === "naukri") {
+      await sleep(1500);
+      if (success() || /saveApply|myapply|apply-confirmation/i.test(location.href)) {
+        await bg("setPending", { pending: null });
+        await report(pending, { outcome: "submitted", note: "Naukri apply (confirmed after redirect)" });
+        return bg("stepDone", {});
+      }
+      if (!/job-listings-/.test(location.href)) {
+        await bg("setPending", { pending: null });
+        await log(`Naukri moved to ${location.pathname} after Apply; checking for questions…`);
+        const res = await afterApply(pending.jobId);
+        await report(pending, res);
+        return bg("stepDone", {});
+      }
+    }
+  } catch (e) { await log(`Error: ${e.message}`); }
 
   try {
     if (task.kind === "naukri-search") await search();
@@ -49,7 +69,16 @@
     await sleep(1500);
     const d = details();
     if (!d.title || !d.company) return log("Could not read this Naukri job.");
-    if (byText("button, span", /^Applied$/i)) return;
+    if (byText("button, span", /^Applied$/i)) {
+      // Already applied on Naukri (maybe by an earlier run that got cut off): make sure JobPilot records it.
+      const ev = await bg("api", { path: "/api/ext/evaluate", method: "POST",
+        body: { platform: "naukri", url: location.href.split("?")[0], ...d } });
+      if (ev.decision === "apply") {
+        await report({ jobId: ev.job_id, title: d.title, company: d.company, url: location.href },
+          { outcome: "submitted", note: "Already applied on Naukri" });
+      }
+      return;
+    }
     const companySite = byText("button", /Apply on company site/i);
     const apply = document.querySelector("#apply-button") || byText("button", /^Apply$/i);
     if (!apply && !companySite) return bg("outcome", { outcome: "skipped" });
@@ -68,17 +97,24 @@
     }
 
     await log(`Applying (${ev.score}): ${d.title} @ ${d.company}`);
+    const pending = { platform: "naukri", jobId: ev.job_id, title: d.title, company: d.company, url: location.href };
+    await bg("setPending", { pending });
     apply.click();
     const res = await afterApply(ev.job_id);
-    await bg("api", { path: "/api/ext/result", method: "POST", body: { job_id: ev.job_id, outcome: res.outcome,
-      note: res.note, missing: res.missing || [] } });
-    await bg("outcome", { outcome: res.outcome, jobId: ev.job_id, title: d.title, company: d.company,
-      url: location.href, missing: res.missing, platform: "naukri" });
-    await log(`${res.outcome === "submitted" ? "✅ Applied" : "✋ Needs you"}: ${d.title} @ ${d.company}${res.missing?.length ? ` (${res.missing.join("; ")})` : ""}`);
+    await bg("setPending", { pending: null });
+    await report(pending, res);
   }
 
-  const success = () => /successfully applied|applied successfully|application (has been )?sent|you have applied/i.test(text(document.body))
-    || byText("button, span", /^Applied$/i);
+  async function report(p, res) {
+    await bg("api", { path: "/api/ext/result", method: "POST", body: { job_id: p.jobId, outcome: res.outcome,
+      note: res.note, missing: res.missing || [] } });
+    await bg("outcome", { outcome: res.outcome, jobId: p.jobId, title: p.title, company: p.company,
+      url: p.url, missing: res.missing, platform: "naukri" });
+    await log(`${res.outcome === "submitted" ? "✅ Applied" : res.outcome === "needs_you" ? "✋ Needs you" : "⚠️ Not confirmed"}: ${p.title} @ ${p.company}${res.missing?.length ? ` (${res.missing.join("; ")})` : ""}${res.outcome === "failed" ? ` — ${res.note}` : ""}`);
+  }
+
+  function success() { return /successfully applied|applied successfully|application (has been )?sent|you have applied/i.test(text(document.body))
+    || !!byText("button, span", /^Applied$/i); }
 
   async function afterApply(jobId) {
     for (let round = 0; round < 15; round++) {
@@ -96,7 +132,9 @@
       const input = drawer.querySelector("[contenteditable='true'], .textArea, input[type='text'], textarea");
       const options = radios.length ? radios.map((r) => text(drawer.querySelector(`label[for="${CSS.escape(r.id)}"]`)) || r.value)
         : chips.map(text);
-      const type = options.length ? "radio" : checks.length ? "checkbox" : "text";
+      // A text box wins: chips next to it are only suggestions, so ask for a free answer and click a chip if it matches.
+      const hasText = input && visible(input);
+      const type = hasText ? "text" : options.length ? "radio" : checks.length ? "checkbox" : "text";
       const { answers } = await bg("api", { path: "/api/ext/answers", method: "POST",
         body: { job_id: jobId, fields: [{ key: "q", label: q.slice(0, 1000), type, options, required: true }] } });
       const a = answers.q;
@@ -104,11 +142,14 @@
         drawer.querySelector("[class*='crossIcon'], .crossIcon, [aria-label='close']")?.click();
         return { outcome: "needs_you", missing: [q], note: "Naukri questionnaire needs your answer." };
       }
-      if (radios.length) {
-        const i = options.findIndex((o) => o.toLowerCase() === String(a).toLowerCase());
-        (i >= 0 ? radios[i] : radios[0]).click();
-      } else if (chips.length) {
-        const c = chips.find((x) => text(x).toLowerCase() === String(a).toLowerCase()) || chips[0];
+      const same = (o) => o.toLowerCase() === String(a).toLowerCase();
+      const ri = options.findIndex(same);
+      if (radios.length && (!hasText || ri >= 0)) {
+        if (ri < 0) { drawer.querySelector("[class*='crossIcon'], .crossIcon")?.click(); return { outcome: "needs_you", missing: [q], note: "No matching option." }; }
+        radios[ri].click();
+      } else if (chips.length && (!hasText || chips.some((x) => same(text(x))))) {
+        const c = chips.find((x) => same(text(x)));
+        if (!c) { drawer.querySelector("[class*='crossIcon'], .crossIcon")?.click(); return { outcome: "needs_you", missing: [q], note: "No matching option." }; }
         c.click();
       } else if (input) {
         if (input.isContentEditable) {
@@ -121,6 +162,8 @@
       const send = drawer.querySelector(".sendMsg, [class*='sendMsg'], [class*='send']") || byText("div, button", /^Save$/i, drawer);
       send?.click();
     }
-    return success() ? { outcome: "submitted", note: "Naukri apply" } : { outcome: "failed", note: "No confirmation from Naukri." };
+    if (success()) return { outcome: "submitted", note: "Naukri apply" };
+    await debugDump("naukri-after-apply");
+    return { outcome: "failed", note: "No confirmation from Naukri." };
   }
 })();

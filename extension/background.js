@@ -26,7 +26,7 @@ const DEFAULTS = {
   log: [],
 };
 
-const STEP_TIMEOUT_MIN = { "linkedin-search": 25, "naukri-search": 3, "naukri-job": 4, "instahyre": 20, ats: 5,
+const STEP_TIMEOUT_MIN = { "linkedin-search": 3, "linkedin-job": 5, "naukri-search": 3, "naukri-job": 4, "instahyre": 20, ats: 5,
   "linkedin-outreach": 6 };
 
 const get = (keys) => chrome.storage.local.get(keys);
@@ -41,10 +41,21 @@ async function state() {
   return merged;
 }
 
+let pendingLog = [];
+let logTimer = null;
 async function log(msg) {
   const { log: l = [] } = await get("log");
-  l.unshift(`${new Date().toLocaleTimeString()}  ${msg}`);
+  const line = `${new Date().toLocaleTimeString()}  ${msg}`;
+  l.unshift(line);
   await set({ log: l.slice(0, 300) });
+  pendingLog.push(line);
+  if (!logTimer) logTimer = setTimeout(flushLog, 3000);
+}
+async function flushLog() {
+  logTimer = null;
+  const lines = pendingLog.splice(0, 50);
+  if (!lines.length) return;
+  try { await api("/api/ext/log", { method: "POST", body: { lines } }); } catch (_) { /* best effort */ }
 }
 
 // ------------------------------------------------------------------------------------------- server API
@@ -181,7 +192,10 @@ async function advance({ keepTab = false } = {}) {
   setTimeout(runStep, 1500 + Math.random() * 2500);
 }
 
+let cycleStartedAt = 0;
 async function startCycle() {
+  if (Date.now() - cycleStartedAt < 60000) return; // one cycle start at a time
+  cycleStartedAt = Date.now();
   try {
     const steps = await buildSteps();
     await set({ steps, stepIndex: 0 });
@@ -245,12 +259,20 @@ async function handle(msg, sender) {
         remaining: s.settings.dailyCap - s.stats.applied, outreachLeft: s.settings.outreachCap - s.stats.outreach };
     }
 
+    // Remember a click on Apply so the next page (after a redirect) can confirm it.
+    case "setPending": await set({ pendingApply: msg.pending ? { ...msg.pending, at: Date.now() } : null }); return {};
+    case "getPending": {
+      const { pendingApply } = await get("pendingApply");
+      return { pending: pendingApply && Date.now() - pendingApply.at < 5 * 60000 ? pendingApply : null };
+    }
+
     // A search page found job pages to visit one by one (Naukri): queue them right after the current step.
     case "insertSteps": {
       const s = await state();
       if (tabId !== s.workerTabId) return {};
       const steps = [...s.steps];
-      steps.splice(s.stepIndex + 1, 0, ...(msg.steps || []).slice(0, 60));
+      const known = new Set(steps.map((x) => x.url));
+      steps.splice(s.stepIndex + 1, 0, ...(msg.steps || []).filter((x) => !known.has(x.url)).slice(0, 60));
       await set({ steps });
       return { count: steps.length };
     }
@@ -314,6 +336,34 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
   return true;
 });
 
+// Pre-connected install: config.local.json (written by scripts/connect-extension.sh, git-ignored) holds the server
+// URL and a session token, so no login is needed; with "autostart" the loop starts as soon as Chrome loads it.
+async function bootstrap() {
+  const s = await state();
+  if (s.token) {
+    if (s.running) {
+      await log("Extension (re)loaded — starting a fresh cycle.");
+      startCycle();
+    }
+    return;
+  }
+  try {
+    const res = await fetch(chrome.runtime.getURL("config.local.json"));
+    if (!res.ok) return;
+    const c = await res.json();
+    if (!c.token) return;
+    await set({ server: c.server || DEFAULTS.server, token: c.token, account: c.account || "" });
+    await log(`Connected to JobPilot as ${c.account || "you"}.`);
+    if (c.autostart) {
+      await set({ running: true });
+      await log("Auto-started.");
+      startCycle();
+    }
+  } catch (_) { /* no pre-connect file */ }
+}
+chrome.runtime.onInstalled.addListener(bootstrap);
+chrome.runtime.onStartup.addListener(bootstrap);
+
 // Watchdog: if a page hangs (site changed, network stall), move on.
 chrome.alarms.create("watchdog", { periodInMinutes: 1 });
 chrome.alarms.onAlarm.addListener(async (a) => {
@@ -334,3 +384,19 @@ chrome.tabs.onRemoved.addListener(async (tabId) => {
   const s = await state();
   if (tabId === s.workerTabId) await set({ workerTabId: null });
 });
+
+// Self-update for the unpacked install: when version.txt on disk changes (code was updated), reload the extension.
+let loadedVersion = null;
+async function checkVersion() {
+  try {
+    const v = (await (await fetch(chrome.runtime.getURL("version.txt"), { cache: "no-store" })).text()).trim();
+    if (loadedVersion === null) loadedVersion = v;
+    else if (v !== loadedVersion) {
+      await log("Code updated — reloading extension.");
+      chrome.runtime.reload();
+    }
+  } catch (_) { /* ignore */ }
+}
+checkVersion();
+chrome.alarms.create("version", { periodInMinutes: 1 });
+chrome.alarms.onAlarm.addListener((a) => { if (a.name === "version") checkVersion(); });

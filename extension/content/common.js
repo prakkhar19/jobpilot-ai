@@ -187,6 +187,32 @@
     "iframe[src*='challenges.cloudflare.com']", "iframe[title*='recaptcha challenge']"];
   const hasCaptcha = () => CAPTCHA.some((s) => [...document.querySelectorAll(s)].some(visible));
 
-  window.JP = { sleep, pause, waitFor, text, visible, byText, bg, log, setValue, setFile, labelFor, collectFields,
+  // Page-structure outline sent to the server log when a site's layout isn't recognised, so selectors can be fixed.
+  async function debugDump(tag, root = document.body) {
+    if (!root) return;
+    const lines = [];
+    const short = (t, n = 80) => (t || "").replace(/\s+/g, " ").trim().slice(0, n);
+    lines.push(`DUMP ${tag} url=${location.pathname}${location.search.slice(0, 120)}`);
+    const hs = [...root.querySelectorAll("h1, h2, h3")].filter(visible).slice(0, 8)
+      .map((h) => `${h.tagName}.${short(h.className, 60)}="${short(text(h), 60)}"`);
+    lines.push(`HEADINGS ${hs.join(" || ")}`);
+    const btns = [...root.querySelectorAll("button, a[role='button'], [role='button']")].filter(visible).slice(0, 25)
+      .map((b) => `${short(text(b), 30) || "-"}[${short(b.getAttribute("aria-label"), 40)}]{${short(b.className, 40)}}`);
+    lines.push(`BUTTONS ${btns.join(" | ")}`);
+    const links = [...root.querySelectorAll("a[href]")].map((a) => a.getAttribute("href")).filter((h) => /jobs|company|apply/.test(h))
+      .slice(0, 15).map((h) => short(h, 70));
+    lines.push(`LINKS ${links.join(" | ")}`);
+    const classes = new Map();
+    root.querySelectorAll("[class]").forEach((e) => String(e.className).split(/\s+/).forEach((c) => {
+      if (/title|company|apply|job|chat|bot|success|applied|card|description|drawer|msg|question/i.test(c)) classes.set(c, (classes.get(c) || 0) + 1);
+    }));
+    lines.push(`CLASSES ${[...classes.keys()].slice(0, 60).join(" ")}`);
+    const attrs = new Set();
+    root.querySelectorAll("*").forEach((e) => { for (const a of e.attributes) if (/^data-/.test(a.name) && /job|view|test|control/i.test(a.name)) attrs.add(`${a.name}=${short(a.value, 30)}`); });
+    lines.push(`DATA ${[...attrs].slice(0, 30).join(" ")}`);
+    for (const l of lines) await log(l.slice(0, 480));
+  }
+
+  window.JP = { debugDump, sleep, pause, waitFor, text, visible, byText, bg, log, setValue, setFile, labelFor, collectFields,
     isEmpty, fillField, answerAndFill, hasCaptcha };
 })();

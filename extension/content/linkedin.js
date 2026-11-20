@@ -1,6 +1,6 @@
 // LinkedIn: Easy Apply on search results, and connection requests to people at companies applied to.
 (async () => {
-  const { sleep, pause, waitFor, text, visible, byText, bg, log, setValue, setFile, collectFields, answerAndFill } = window.JP;
+  const { sleep, pause, waitFor, text, visible, byText, bg, log, setValue, setFile, collectFields, answerAndFill, debugDump } = window.JP;
   if (window.__jpLinkedIn) return;
   window.__jpLinkedIn = true;
 
@@ -16,7 +16,8 @@
   }
 
   try {
-    if (task.kind === "linkedin-search") await searchPage(ctx);
+    if (task.kind === "linkedin-search") await collectJobs(ctx);
+    else if (task.kind === "linkedin-job") await jobPage(ctx);
     else if (task.kind === "linkedin-outreach") await outreach(ctx);
   } catch (e) {
     await log(`Error: ${e.message}`);
@@ -25,9 +26,25 @@
 
   // ------------------------------------------------------------------------------------- Easy Apply
 
+  const CARD_LINK = "a[href*='/jobs/view/'], a[href*='currentJobId='], a.job-card-list__title, a.job-card-container__link, a.job-card-list__title--link";
   function cards() {
-    return [...document.querySelectorAll("li[data-occludable-job-id], li.jobs-search-results__list-item, div.job-card-container")]
-      .filter((c) => c.querySelector("a[href*='/jobs/view/'], a.job-card-list__title, a.job-card-container__link"));
+    const found = [...document.querySelectorAll("li[data-occludable-job-id], [data-job-id], li.jobs-search-results__list-item, div.job-card-container, li.scaffold-layout__list-item")]
+      .filter((c) => c.querySelector(CARD_LINK) || c.matches("[data-job-id], [data-occludable-job-id]"));
+    // Outermost card only (some layouts nest data-job-id inside the li).
+    return found.filter((c) => !found.some((o) => o !== c && o.contains(c)));
+  }
+  function cardLink(card) {
+    return card.querySelector(CARD_LINK) || card.querySelector("a[href*='/jobs/']") || card;
+  }
+  function cardJobId(card) {
+    const id = card.getAttribute("data-occludable-job-id") || card.getAttribute("data-job-id")
+      || card.querySelector("[data-job-id]")?.getAttribute("data-job-id");
+    const href = cardLink(card).href || "";
+    return id || (href.match(/\/jobs\/view\/(\d+)/) || href.match(/currentJobId=(\d+)/) || [])[1] || "";
+  }
+  function findEasyApply() {
+    return [...document.querySelectorAll("button, a")].find((b) => visible(b) && !b.closest(".job-card-container, li[data-occludable-job-id]")
+      && (/^Easy Apply$/i.test(text(b)) || /Easy Apply to/i.test(b.getAttribute("aria-label") || "")));
   }
 
   async function loadAllCards() {
@@ -41,41 +58,132 @@
 
   function details() {
     const pane = document.querySelector(".jobs-search__job-details--container, .jobs-details, .job-view-layout") || document;
-    const title = text(pane.querySelector(".job-details-jobs-unified-top-card__job-title, .jobs-unified-top-card__job-title, h1, h2.t-24"));
-    const company = text(pane.querySelector(".job-details-jobs-unified-top-card__company-name, .jobs-unified-top-card__company-name"));
+    const title = text(pane.querySelector(".job-details-jobs-unified-top-card__job-title, .jobs-unified-top-card__job-title, h1, h2.t-24"))
+      || text(document.querySelector("h1"));
+    const company = text(pane.querySelector(".job-details-jobs-unified-top-card__company-name, .jobs-unified-top-card__company-name, a[href*='/company/']"))
+      || text(document.querySelector(".job-details-jobs-unified-top-card__company-name a, a[href*='/company/'][class*='company']"));
     const meta = text(pane.querySelector(".job-details-jobs-unified-top-card__primary-description-container, .job-details-jobs-unified-top-card__tertiary-description-container, .jobs-unified-top-card__primary-description"));
-    const desc = text(pane.querySelector("#job-details, .jobs-description__content, .jobs-box__html-content"));
+    const desc = text(pane.querySelector("#job-details, .jobs-description__content, .jobs-box__html-content, [class*='jobs-description']"))
+      || text(document.querySelector("#job-details, article, [class*='description']"));
     const location = meta.split("·")[0].trim();
     const wp = /remote/i.test(meta + text(pane.querySelector(".job-details-preferences-and-skills, .job-details-fit-level-preferences")))
       ? "remote" : /hybrid/i.test(meta) ? "hybrid" : /on-?site/i.test(meta) ? "onsite" : "unknown";
     return { title, company, location, description: desc, workplace_type: wp };
   }
 
+  // Works with both the old (/jobs/search/) and new (/jobs/search-results/) layouts: gather job ids from links,
+  // data attributes and the page source, then visit each job's own page.
+  function jobIdsOnPage() {
+    const ids = new Set();
+    document.querySelectorAll("[data-job-id], [data-occludable-job-id]").forEach((e) => {
+      const v = e.getAttribute("data-job-id") || e.getAttribute("data-occludable-job-id");
+      if (/^\d{6,}$/.test(v)) ids.add(v);
+    });
+    document.querySelectorAll("a[href*='/jobs/view/'], a[href*='currentJobId=']").forEach((a) => {
+      const m = a.href.match(/\/jobs\/view\/(\d{6,})/) || a.href.match(/currentJobId=(\d{6,})/);
+      if (m) ids.add(m[1]);
+    });
+    for (const m of document.documentElement.innerHTML.matchAll(/(?:jobPosting|fsd_jobPosting|jobPostingCard)[:(,](\d{8,})/g)) ids.add(m[1]);
+    return [...ids];
+  }
+
+  async function collectJobs() {
+    await waitFor(() => jobIdsOnPage().length, 15000);
+    // Scroll whatever list is on the page so lazy-loaded jobs render.
+    const scrollers = [...document.querySelectorAll("div, ul, main")].filter((e) => e.scrollHeight > e.clientHeight + 200
+      && /auto|scroll/.test(getComputedStyle(e).overflowY));
+    for (let i = 0; i < 10; i++) {
+      scrollers.forEach((e) => e.scrollBy(0, 700));
+      window.scrollBy(0, 700);
+      await sleep(600);
+    }
+    const ids = jobIdsOnPage().slice(0, 25);
+    await log(`LinkedIn: ${ids.length} jobs found on this search.`);
+    if (ids.length < 3) await debugDump("linkedin-search");
+    if (ids.length) {
+      await bg("insertSteps", { steps: ids.map((id) => ({ kind: "linkedin-job", url: `https://www.linkedin.com/jobs/view/${id}/`,
+        label: `LinkedIn job ${id}` })) });
+    }
+  }
+
+  function topCard() {
+    const title = text(document.querySelector(".job-details-jobs-unified-top-card__job-title h1, .job-details-jobs-unified-top-card__job-title, .jobs-unified-top-card__job-title, h1"));
+    const company = text(document.querySelector(".job-details-jobs-unified-top-card__company-name a, .job-details-jobs-unified-top-card__company-name, .jobs-unified-top-card__company-name a, a[href*='/company/'] span, a[href*='/company/']"));
+    const meta = text(document.querySelector(".job-details-jobs-unified-top-card__primary-description-container, .job-details-jobs-unified-top-card__tertiary-description-container, .jobs-unified-top-card__primary-description, .job-details-jobs-unified-top-card__container--two-pane"));
+    const prefs = text(document.querySelector(".job-details-preferences-and-skills, .job-details-fit-level-preferences, .jobs-unified-top-card__job-insight"));
+    const description = text(document.querySelector("#job-details, .jobs-description__content, .jobs-box__html-content, [class*='jobs-description'], article"));
+    const wp = /remote/i.test(meta + prefs) ? "remote" : /hybrid/i.test(meta + prefs) ? "hybrid" : /on-?site/i.test(meta + prefs) ? "onsite" : "unknown";
+    return { title, company, location: meta.split("·")[0].trim(), description, workplace_type: wp };
+  }
+
+  async function jobPage({ remaining }) {
+    if (remaining <= 0) return;
+    await waitFor(() => text(document.querySelector("h1")), 12000);
+    await waitFor(() => text(document.querySelector("#job-details, .jobs-description__content, [class*='jobs-description'], article")), 6000);
+    await sleep(1200);
+    const d = topCard();
+    if (!d.title || !d.company) {
+      await log(`Could not read LinkedIn job ${location.pathname} (title="${d.title}", company="${d.company}").`);
+      return debugDump("linkedin-job");
+    }
+    if (/\bApplied\b.{0,40}ago|Application submitted/i.test(text(document.querySelector("main") || document.body).slice(0, 4000))) {
+      return log(`Already applied: ${d.title} @ ${d.company}`);
+    }
+    const easy = findEasyApply();
+    if (!easy) {
+      await log(`Skip: ${d.title} @ ${d.company} — not Easy Apply (applies on company site)`);
+      return bg("outcome", { outcome: "skipped" });
+    }
+    const jobUrl = location.href.split("?")[0];
+    const ev = await bg("api", { path: "/api/ext/evaluate", method: "POST", body: { platform: "linkedin", url: jobUrl, ...d } });
+    if (ev.decision !== "apply") {
+      await log(`Skip: ${d.title} @ ${d.company} — ${ev.reason}`);
+      return bg("outcome", { outcome: "skipped" });
+    }
+    await log(`Applying (${ev.score}): ${d.title} @ ${d.company}`);
+    const resume = await bg("resume", { jobId: ev.job_id });
+    easy.click();
+    const res = await easyApply(ev.job_id, resume);
+    await bg("api", { path: "/api/ext/result", method: "POST",
+      body: { job_id: ev.job_id, outcome: res.outcome, note: res.note, missing: res.missing || [] } });
+    await bg("outcome", { outcome: res.outcome, jobId: ev.job_id, title: d.title, company: d.company,
+      url: jobUrl, missing: res.missing, platform: "linkedin" });
+    await log(`${res.outcome === "submitted" ? "✅ Applied" : res.outcome === "needs_you" ? "✋ Needs you" : "⚠️ Failed"}: ${d.title} @ ${d.company}${res.missing?.length ? ` (${res.missing.join("; ")})` : ""}${res.outcome === "failed" ? ` — ${res.note}` : ""}`);
+  }
+
   async function searchPage({ remaining }) {
     await waitFor(() => cards().length, 15000);
     await loadAllCards();
     const all = cards();
-    if (!all.length) return log("No jobs on this search page.");
+    if (!all.length) {
+      return log(`No job cards found (page: ${location.pathname}; links to jobs: ${document.querySelectorAll("a[href*='/jobs/view/'], a[href*='currentJobId=']").length}).`);
+    }
     await log(`${all.length} jobs on this page.`);
     let left = remaining;
     for (const card of all) {
       if (left <= 0) return log("Daily cap reached.");
       if (/\bApplied\b/.test(text(card))) continue;
-      const link = card.querySelector("a[href*='/jobs/view/'], a.job-card-list__title, a.job-card-container__link");
-      const jobUrl = link.href.split("?")[0];
+      const link = cardLink(card);
+      const jid = cardJobId(card);
+      const jobUrl = jid ? `https://www.linkedin.com/jobs/view/${jid}/` : (link.href || location.href).split("?")[0];
       const before = text(document.querySelector(".job-details-jobs-unified-top-card__job-title, .jobs-unified-top-card__job-title"));
       link.click();
       await waitFor(() => {
         const t = text(document.querySelector(".job-details-jobs-unified-top-card__job-title, .jobs-unified-top-card__job-title"));
-        return t && t !== before && text(document.querySelector("#job-details, .jobs-description__content"));
+        return t && t !== before;
       }, 10000);
+      await waitFor(() => text(document.querySelector("#job-details, .jobs-description__content, [class*='jobs-description']")), 5000);
       await pause(1200, 2500);
       const d = details();
-      if (!d.title || !d.company) continue;
+      if (!d.title || !d.company) { await log(`Could not read job details (card ${jid || "?"}).`); continue; }
 
-      const easy = byText("button.jobs-apply-button, .jobs-apply-button--top-card button, button", /^Easy Apply/i,
-        document.querySelector(".jobs-search__job-details--container, .jobs-details") || document);
-      if (!easy) { await bg("outcome", { outcome: "skipped" }); continue; }
+      const easy = findEasyApply();
+      if (!easy) {
+        const ext = byText("button, a", /^Apply( on company website)?$/i);
+        await log(`Skip: ${d.title} @ ${d.company} — ${ext ? "applies on company site, not Easy Apply" : "no Easy Apply button found"}`);
+        await bg("outcome", { outcome: "skipped" });
+        continue;
+      }
 
       let ev;
       try {

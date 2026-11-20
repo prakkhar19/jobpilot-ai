@@ -1,0 +1,95 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  :root { --bg:#0d1512; --card:#15201c; --line:#24332d; --fg:#e8f0ec; --mut:#8fa39a; --acc:#3ddc84; --warn:#ffb547; --bad:#ff6b6b; }
+  * { box-sizing: border-box; }
+  body { width: 380px; margin: 0; font: 13px/1.4 system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--fg); }
+  header { display:flex; align-items:center; justify-content:space-between; padding:12px 14px; border-bottom:1px solid var(--line); }
+  header b { font-size:15px; } header .dot { width:8px; height:8px; border-radius:50%; background:var(--mut); display:inline-block; margin-right:6px; }
+  header .dot.on { background: var(--acc); box-shadow: 0 0 8px var(--acc); }
+  section { padding: 12px 14px; border-bottom: 1px solid var(--line); }
+  h3 { margin: 0 0 8px; font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--mut); }
+  input[type=text], input[type=password], input[type=number], input[type=url] { width:100%; padding:7px 9px; margin:3px 0 8px; background:var(--card); color:var(--fg); border:1px solid var(--line); border-radius:7px; }
+  button { cursor:pointer; padding:8px 12px; border-radius:8px; border:1px solid var(--line); background:var(--card); color:var(--fg); font-weight:600; }
+  button.primary { background: var(--acc); color:#04140b; border-color: var(--acc); width:100%; font-size:14px; }
+  button.stop { background: var(--bad); border-color: var(--bad); color:#fff; width:100%; font-size:14px; }
+  button.small { padding:4px 8px; font-size:12px; font-weight:500; }
+  .stats { display:grid; grid-template-columns: repeat(4, 1fr); gap:6px; text-align:center; }
+  .stats div { background: var(--card); border-radius:8px; padding:8px 4px; }
+  .stats b { display:block; font-size:18px; }
+  .stats span { color: var(--mut); font-size: 11px; }
+  .row { display:flex; gap:8px; align-items:center; justify-content:space-between; margin:4px 0; }
+  .row input[type=number] { width: 70px; margin:0; }
+  label.chk { display:flex; gap:6px; align-items:center; margin:3px 0; }
+  .ny { background: var(--card); border:1px solid var(--line); border-radius:8px; padding:8px; margin-bottom:8px; }
+  .ny a { color: var(--acc); text-decoration:none; font-weight:600; }
+  .ny .q { color: var(--warn); font-size:12px; margin-top:6px; }
+  .ny input { margin:3px 0 4px; }
+  #log { max-height: 170px; overflow:auto; font: 11px/1.45 ui-monospace, Menlo, monospace; color: var(--mut); white-space: pre-wrap; }
+  .err { color: var(--bad); margin: 4px 0; }
+  .muted { color: var(--mut); font-size:12px; }
+  details summary { cursor:pointer; color: var(--mut); }
+</style>
+</head>
+<body>
+<header><span><span id="dot" class="dot"></span><b>JobPilot Auto-Apply</b></span><span id="acct" class="muted"></span></header>
+
+<section id="login" hidden>
+  <h3>Connect to your JobPilot server</h3>
+  <input id="server" type="url" placeholder="http://localhost:8080">
+  <input id="email" type="text" placeholder="JobPilot email">
+  <input id="password" type="password" placeholder="JobPilot password">
+  <button id="loginBtn" class="primary">Log in</button>
+  <div id="loginErr" class="err"></div>
+  <p class="muted">Stay logged in to LinkedIn, Naukri and Instahyre in this Chrome — the extension uses those sessions.</p>
+</section>
+
+<div id="main" hidden>
+  <section>
+    <button id="toggle" class="primary">Start auto-apply</button>
+    <div id="current" class="muted" style="margin-top:6px"></div>
+  </section>
+  <section>
+    <h3>Today</h3>
+    <div class="stats">
+      <div><b id="sApplied">0</b><span>applied</span></div>
+      <div><b id="sNeeds">0</b><span>need you</span></div>
+      <div><b id="sOut">0</b><span>connects</span></div>
+      <div><b id="sSkip">0</b><span>skipped</span></div>
+    </div>
+  </section>
+  <section id="needsSec">
+    <h3>Needs you (<span id="nyCount">0</span>)</h3>
+    <p class="muted">Answer once — it's saved and used on every future application.</p>
+    <div id="needs"></div>
+  </section>
+  <section>
+    <details>
+      <summary>Settings</summary>
+      <div style="margin-top:8px">
+        <label class="chk"><input type="checkbox" id="pLinkedin"> LinkedIn Easy Apply</label>
+        <label class="chk"><input type="checkbox" id="pNaukri"> Naukri</label>
+        <label class="chk"><input type="checkbox" id="pInstahyre"> Instahyre</label>
+        <label class="chk"><input type="checkbox" id="pCompany"> Company career pages (Greenhouse, Lever, Ashby…)</label>
+        <label class="chk"><input type="checkbox" id="outreach"> Connect with recruiters/engineers after applying</label>
+        <div class="row"><span>Max applications / day</span><input type="number" id="dailyCap" min="1" max="300"></div>
+        <div class="row"><span>Max connection requests / day</span><input type="number" id="outreachCap" min="0" max="100"></div>
+        <div class="row"><span>People per company</span><input type="number" id="perCompany" min="1" max="5"></div>
+        <div class="row"><span>Search pages per role (LinkedIn)</span><input type="number" id="pages" min="1" max="10"></div>
+        <div class="row"><span>Minutes between cycles</span><input type="number" id="cycle" min="15" max="1440"></div>
+        <p class="muted">Roles, locations, remote/hybrid and the minimum match score come from JobPilot → Agent settings.</p>
+        <button id="save" class="small">Save settings</button>
+        <button id="logout" class="small">Log out</button>
+      </div>
+    </details>
+  </section>
+  <section>
+    <h3>Activity</h3>
+    <div id="log"></div>
+  </section>
+</div>
+<script src="popup.js"></script>
+</body>
+</html>

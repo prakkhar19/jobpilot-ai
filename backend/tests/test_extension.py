@@ -78,7 +78,7 @@ def test_needs_you_and_threshold(client, anon):
     cfg = client.get("/api/agent/config").json()
     cfg["min_match_score"] = 99
     client.put("/api/agent/config", json=cfg)
-    ev = anon.post("/api/ext/evaluate", json=_job(), headers=h).json()
+    ev = anon.post("/api/ext/evaluate", json=_job() | {"title": "Chartered Accountant"}, headers=h).json()
     assert ev["decision"] == "skip" and "below" in ev["reason"]
     anon.post("/api/ext/result", json={"job_id": ev["job_id"], "outcome": "needs_you", "missing": ["Expected CTC"]},
               headers=h)
@@ -105,3 +105,34 @@ def test_queue_lists_company_board_jobs(client, anon):
     client.post("/api/jobs/rematch")
     q = anon.get("/api/ext/queue", headers=h).json()
     assert any("greenhouse" in i["url"] for i in q)
+
+
+def test_notice_period_buttons(client, anon):
+    h = _ext(client, anon)  # facts: Notice period = Immediate
+    ev = anon.post("/api/ext/evaluate", json=_job(), headers=h).json()
+    f = [{"key": "n", "label": "What is your notice period?", "type": "radio",
+          "options": ["15 Days or less", "1 Month", "2 Months", "3 Months"], "required": True}]
+    a = anon.post("/api/ext/answers", json={"job_id": ev["job_id"], "fields": f}, headers=h).json()
+    assert a["answers"]["n"] == "15 Days or less"
+
+
+def test_title_match_lower_bar_and_senior_skip(client, anon):
+    h = _ext(client, anon)
+    cfg = client.get("/api/agent/config").json()
+    cfg["min_match_score"] = 95
+    cfg["target_roles"] = ["Machine Learning Engineer"]
+    client.put("/api/agent/config", json=cfg)
+    ev = anon.post("/api/ext/evaluate", json=_job(), headers=h).json()
+    assert ev["decision"] == "apply", ev  # title matches a target role → bar drops to 40
+    from app.api.extension import _SENIOR
+    assert _SENIOR.search("Principal AI Architect") and _SENIOR.search("Lead Engineer, Agentic AI")
+    assert not _SENIOR.search("GenAI Engineer") and not _SENIOR.search("Leadership Software Engineer")
+
+
+def test_area_years():
+    from app.api.extension import _mentions
+    from app.services.skills import skill_key
+    skills = {skill_key(s) for s in ["Generative AI", "Large Language Models", "REST APIs", "React"]}
+    assert _mentions("How many years of experience do you have in Aiml?", skills)
+    assert _mentions("How many years of experience do you have in Open Api?", skills)
+    assert not _mentions("How many years of experience do you have in SAP ABAP?", skills)

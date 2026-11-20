@@ -132,6 +132,19 @@ def _latest(db: DB, model: type, user: User, job_id: uuid.UUID):  # noqa: ANN202
                      .order_by(model.created_at.desc()).limit(1))
 
 
+# Postings scraped from job boards rarely state skills/experience in a parseable way, so their scores run low.
+# When the title clearly matches a target role, a lower bar applies.
+TITLE_MATCH_MIN_SCORE = 40.0
+_SENIOR = re.compile(r"(?i)\b(principal|lead|architect|manager|staff|director|head|vp|vice president|sr\.?|senior)\b")
+
+
+class _ExpRow:
+    def __init__(self, d: dict) -> None:
+        self.start_date = d.get("start_date") or ""
+        self.end_date = d.get("end_date") or ""
+        self.is_current = bool(d.get("is_current"))
+
+
 def _excluded(cfg, job: JobIn) -> str:  # noqa: ANN001
     text = f"{job.title}\n{job.description}".lower()
     for kw in cfg.excluded_keywords or []:
@@ -167,10 +180,18 @@ def evaluate(body: JobIn, db: DB, user: ExtUser) -> dict:
         pass
     m = db.scalar(select(JobMatch).where(JobMatch.user_id == user.id, JobMatch.job_id == job.id))
     score = round(m.overall_score, 1) if m else 0.0
-    if score < cfg.min_match_score:
+    p = profile_to_dict(profile)
+    years = total_experience_years([_ExpRow(e) for e in p.get("experiences") or []]) or 0.0
+    if years < 3 and _SENIOR.search(job.title):
         db.commit()
         return {"job_id": str(job.id), "decision": "skip", "score": score,
-                "reason": f"match {score} is below your minimum {cfg.min_match_score}"}
+                "reason": f"senior role ({_SENIOR.search(job.title).group(0)}) for {years:.1f} years of experience"}
+    title_match = next((c.get("score") or 0 for c in (m.components if m else []) if c.get("key") == "role_alignment"), 0)
+    threshold = min(cfg.min_match_score, TITLE_MATCH_MIN_SCORE) if title_match >= 80 else cfg.min_match_score
+    if score < threshold:
+        db.commit()
+        return {"job_id": str(job.id), "decision": "skip", "score": score,
+                "reason": f"match {score} is below your minimum {threshold}"}
 
     return _prepare(db, user, profile, cfg, job, score, body.platform)
 
@@ -243,7 +264,24 @@ def _profile_skills(p: dict) -> set[str]:
     return {skill_key(s["name"]) for s in p.get("skills") or []}
 
 
+# Broad areas recruiters ask about ("years in AIML", "Open API") → profile skills that count as experience in them.
+_AREAS = [
+    (re.compile(r"(?i)\b(ai\s*/?\s*ml|aiml|ai|ml|machine learning|artificial intelligence|deep learning|gen\s*ai|"
+                r"generative ai|llms?|nlp|data science|agentic)\b"),
+     ("generative ai", "large language models", "natural language processing", "machine learning", "llm training",
+      "llm fine tuning", "deep learning")),
+    (re.compile(r"(?i)\b(open\s*api|apis?|rest(ful)?|backend)\b"), ("rest apis", "node js", "express", "flask")),
+    (re.compile(r"(?i)\b(mern|full\s*stack|web development)\b"), ("mern stack", "react", "node js")),
+]
+
+
 def _mentions(label: str, skills: set[str]) -> list[str]:
+    hits = [m.group(0) for pat, wanted in _AREAS for m in [pat.search(label)]
+            if m and any(skill_key(w) in skills for w in wanted)]
+    return hits + _direct_mentions(label, skills)
+
+
+def _direct_mentions(label: str, skills: set[str]) -> list[str]:
     words = re.findall(r"[a-z0-9+#.\-]+(?:\s[a-z0-9+#.\-]+)?", label.lower())
     found = []
     for w in words:
@@ -299,6 +337,20 @@ def _derived_answer(f: FieldIn, p: dict, years: float | None) -> str | None:
     return None
 
 
+def _notice_option(options: list[str], p: dict) -> str | None:
+    """Map an 'Immediate' notice-period fact onto choice buttons like '15 days or less' / '0-15 days'."""
+    facts = {normalize_label(k): str(v) for k, v in (p.get("application_facts") or {}).items()}
+    val = facts.get("notice period", "")
+    if not re.search(r"(?i)immediate|^0\b|none|no notice", val):
+        return None
+    for pat in (r"(?i)immediate", r"(?i)\b0\s*(days?)?\b", r"(?i)15 days or less|less than 15|0\s*-\s*15|within 15|upto 15|up to 15",
+                r"(?i)serving notice", r"(?i)1 month or less|less than (a|1) month|0\s*-\s*30|within 30"):
+        hit = next((o for o in options if re.search(pat, o)), None)
+        if hit:
+            return hit
+    return None
+
+
 @router.post("/answers")
 def answers(body: AnswersIn, db: DB, user: ExtUser) -> dict:
     """Answer the fields of an application form. ``null`` = only the user can answer it."""
@@ -321,6 +373,8 @@ def answers(body: AnswersIn, db: DB, user: ExtUser) -> dict:
         v = (mapped.get(f.key) or {}).get("value")
         if not v:
             v = _derived_answer(f, p, years)
+        if not v and f.options and re.search(r"(?i)notice|join|start", f.label):
+            v = _notice_option(f.options, p)
         if not v and f.type == "textarea" or (not v and f.type == "text" and len(f.label) > 40):
             free_text.append(f)
             continue
@@ -468,3 +522,19 @@ def queue(db: DB, user: ExtUser, limit: int = 30) -> list[dict]:
         if len(out) >= max(1, min(limit, 100)):
             break
     return out
+
+
+# ------------------------------------------------------------------------------------------ activity log
+
+_ext_log = __import__("logging").getLogger("jobpilot.extension")
+
+
+class LogIn(BaseModel):
+    lines: list[str] = Field(max_length=50)
+
+
+@router.post("/log", status_code=204)
+def ext_log(body: LogIn, user: ExtUser) -> None:
+    """The extension mirrors its activity log here so it shows up in the server logs."""
+    for line in body.lines:
+        _ext_log.info("ext %s | %s", user.email, line[:500])

@@ -79,6 +79,18 @@ card. Everything also works with **no AI provider** configured; an AI provider m
 Requirements: Docker with Compose v2 (Docker Desktop, or Docker Engine on Linux). Nothing else —
 no Python, Node, PostgreSQL, Redis or browsers on your machine.
 
+**One click:**
+
+| Windows | macOS / Linux |
+|---|---|
+| Install [Docker Desktop](https://www.docker.com/products/docker-desktop/), clone or [download the ZIP](https://github.com/prakkhar19/jobpilot-ai/archive/refs/heads/main.zip), then double-click **`start.bat`**. Stop with **`stop.bat`**. | `git clone https://github.com/prakkhar19/jobpilot-ai.git && cd jobpilot-ai && ./start.sh` |
+
+The script creates `.env` with random secrets on the first run, builds everything, waits until it's ready and
+opens http://localhost:8080. Then add the Chrome extension: `chrome://extensions` → **Developer mode** →
+**Load unpacked** → pick the `extension` folder (see [extension/README.md](extension/README.md)).
+
+**Manually:**
+
 ```bash
 git clone https://github.com/prakkhar19/jobpilot-ai.git
 cd jobpilot-ai

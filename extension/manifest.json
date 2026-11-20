@@ -3,34 +3,75 @@
   "name": "JobPilot Auto-Apply",
   "version": "1.0.0",
   "description": "Applies to matching jobs for you on LinkedIn, Naukri, Instahyre and company career pages, using tailored resumes from your JobPilot server.",
-  "permissions": ["storage", "tabs", "scripting", "alarms", "notifications"],
-  "host_permissions": ["<all_urls>"],
-  "background": { "service_worker": "background.js" },
-  "action": { "default_popup": "popup.html", "default_title": "JobPilot Auto-Apply" },
+  "permissions": [
+    "storage",
+    "tabs",
+    "scripting",
+    "alarms",
+    "notifications"
+  ],
+  "host_permissions": [
+    "<all_urls>"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "JobPilot Auto-Apply",
+    "default_icon": "icon.png"
+  },
   "content_scripts": [
     {
-      "matches": ["https://www.linkedin.com/*"],
-      "js": ["content/common.js", "content/linkedin.js"],
-      "run_at": "document_idle"
-    },
-    {
-      "matches": ["https://www.naukri.com/*"],
-      "js": ["content/common.js", "content/naukri.js"],
-      "run_at": "document_idle"
-    },
-    {
-      "matches": ["https://www.instahyre.com/*"],
-      "js": ["content/common.js", "content/instahyre.js"],
+      "matches": [
+        "https://www.linkedin.com/*"
+      ],
+      "js": [
+        "content/common.js",
+        "content/linkedin.js"
+      ],
       "run_at": "document_idle"
     },
     {
       "matches": [
-        "https://boards.greenhouse.io/*", "https://job-boards.greenhouse.io/*", "https://boards.eu.greenhouse.io/*",
-        "https://job-boards.eu.greenhouse.io/*", "https://jobs.lever.co/*", "https://jobs.eu.lever.co/*",
-        "https://jobs.ashbyhq.com/*", "https://apply.workable.com/*", "https://jobs.smartrecruiters.com/*"
+        "https://www.naukri.com/*"
       ],
-      "js": ["content/common.js", "content/ats.js"],
+      "js": [
+        "content/common.js",
+        "content/naukri.js"
+      ],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": [
+        "https://www.instahyre.com/*"
+      ],
+      "js": [
+        "content/common.js",
+        "content/instahyre.js"
+      ],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": [
+        "https://boards.greenhouse.io/*",
+        "https://job-boards.greenhouse.io/*",
+        "https://boards.eu.greenhouse.io/*",
+        "https://job-boards.eu.greenhouse.io/*",
+        "https://jobs.lever.co/*",
+        "https://jobs.eu.lever.co/*",
+        "https://jobs.ashbyhq.com/*",
+        "https://apply.workable.com/*",
+        "https://jobs.smartrecruiters.com/*"
+      ],
+      "js": [
+        "content/common.js",
+        "content/ats.js"
+      ],
       "run_at": "document_idle"
     }
-  ]
+  ],
+  "icons": {
+    "128": "icon.png"
+  }
 }
