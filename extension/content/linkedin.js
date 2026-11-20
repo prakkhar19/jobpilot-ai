@@ -15,14 +15,6 @@
     return bg("stepDone", { note: "LinkedIn needs login.", keepTab: true });
   }
 
-  try {
-    if (task.kind === "linkedin-search") await collectJobs(ctx);
-    else if (task.kind === "linkedin-job") await jobPage(ctx);
-    else if (task.kind === "linkedin-outreach") await outreach(ctx);
-  } catch (e) {
-    await log(`Error: ${e.message}`);
-  }
-  bg("stepDone", task.kind === "linkedin-outreach" ? { outreachDone: task.job.jobId } : {});
 
   // ------------------------------------------------------------------------------------- Easy Apply
 
@@ -260,8 +252,12 @@
     }
   }
 
-  const modalSel = ".jobs-easy-apply-modal, [data-test-modal-id='easy-apply-modal'], div[role='dialog'].artdeco-modal";
-  const modal = () => [...document.querySelectorAll(modalSel)].find(visible);
+  // Function declarations (hoisted): the page handler at the top of this file runs before later consts exist.
+  function modal() {
+    const sel = ".jobs-easy-apply-modal, [data-test-modal-id='easy-apply-modal'], div[role='dialog'].artdeco-modal";
+    return deepAll(document, sel).find(visible)
+      || deepAll(document, "[role='dialog']").find((d) => visible(d) && /apply|contact info|resume|submit/i.test(text(d).slice(0, 600)));
+  }
 
   async function easyApply(jobId, resume) {
     const m0 = await waitFor(modal, 10000);
@@ -412,4 +408,13 @@
     }
     if (!sent) await log(`No one to connect with at ${job.company} on this page.`);
   }
+  // Runs last, so every const above is initialised before the page handlers use it.
+  try {
+    if (task.kind === "linkedin-search") await collectJobs(ctx);
+    else if (task.kind === "linkedin-job") await jobPage(ctx);
+    else if (task.kind === "linkedin-outreach") await outreach(ctx);
+  } catch (e) {
+    await log(`Error: ${e.message}`);
+  }
+  bg("stepDone", task.kind === "linkedin-outreach" ? { outreachDone: task.job.jobId } : {});
 })();
