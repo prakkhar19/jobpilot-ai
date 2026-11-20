@@ -53,10 +53,26 @@
     return out;
   }
 
+  // Is el the thing actually on top at its centre (not covered by LinkedIn's full-page frame or an overlay)?
+  function onTop(el) {
+    el.scrollIntoView({ block: "center" });
+    const r = el.getBoundingClientRect();
+    const x = r.left + r.width / 2, y = r.top + r.height / 2;
+    const fe = el.ownerDocument.defaultView?.frameElement;
+    if (fe) {
+      const fr = fe.getBoundingClientRect();
+      if (document.elementFromPoint(x + fr.left, y + fr.top) !== fe) return false;
+    }
+    const hit = el.ownerDocument.elementFromPoint(x, y);
+    return !!hit && (hit === el || el.contains(hit));
+  }
+
   function findEasyApply() {
-    return deepAll(document, "button, a, [role='button']").find((b) => visible(b) && !b.closest(".job-card-container, li[data-occludable-job-id]")
-      && (/^Easy Apply$/i.test(text(b)) || /Easy Apply to/i.test(b.getAttribute("aria-label") || "")
-        || /\/jobs\/view\/\d+\/apply\b/.test(b.getAttribute("href") || "")));
+    const all = deepAll(document, "button, a, [role='button']").filter((b) => visible(b) && !b.closest(".job-card-container, li[data-occludable-job-id]")
+      && (/^Easy Apply$/i.test(text(b)) || /Easy Apply to/i.test(b.getAttribute("aria-label") || "")));
+    const best = all.find(onTop) || all[all.length - 1];
+    if (all.length) log(`EASY-CANDIDATES ${all.length}: ${all.map((b) => `${b.ownerDocument !== document ? "frame" : "top"}/${onTop(b) ? "onTop" : "covered"}`).join(", ")}`);
+    return best;
   }
 
   async function loadAllCards() {
