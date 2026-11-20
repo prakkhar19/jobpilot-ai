@@ -266,7 +266,7 @@
       await log(`→ ${host}: applying on the company site next.`);
       return { outcome: "queued" };
     }
-    const missing = ["Apply on the company site (resume is ready in JobPilot)"];
+    const missing = ["Open the employer's page from the job post and apply there (resume is ready in JobPilot)"];
     await bg("api", { path: "/api/ext/result", method: "POST", body: { job_id: ev.job_id, outcome: "needs_you", apply_url: ext.url || "",
       note: "The company-site link didn't open.", missing } });
     await bg("outcome", { outcome: "needs_you", jobId: ev.job_id, title: d.title, company: d.company, url: ext.url || jobUrl,
