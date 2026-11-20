@@ -213,9 +213,8 @@
     for (const l of lines) await log(l.slice(0, 480));
   }
 
-  // "Apply on company site": click through to the employer. If it's an application system JobPilot can fill in
-  // (Greenhouse, Lever, Ashby, Workable, SmartRecruiters) the job is queued to be applied to there, next; otherwise
-  // it goes to "Needs you" with the employer's link. If the click navigates this tab instead, background.js takes over.
+  // "Apply on company site": click through to the employer and queue the job to be applied to there, next (ats.js
+  // handles any careers site). If the click navigates this tab instead, background.js takes over.
   async function viaCompanySite(button, ev, d, platform, jobUrl) {
     const job = { jobId: ev.job_id, title: d.title, company: d.company };
     await log(`Applying (${ev.score}) on the company site: ${d.title} @ ${d.company}`);
@@ -230,15 +229,15 @@
     const host = (() => { try { return new URL(ext.url).hostname; } catch (_) { return ""; } })();
     if (ext.supported) {
       await bg("insertSteps", { steps: [{ kind: "ats", url: ext.url, jobId: ev.job_id, label: `${d.company}: ${d.title} (${ev.score})` }] });
-      await log(`→ ${host}: applying there next.`);
+      await log(`→ ${host}: applying on the company site next.`);
       return { outcome: "queued" };
     }
-    const missing = [host ? `Apply on ${host} (resume is ready in JobPilot)` : "Apply on the company site (resume is ready in JobPilot)"];
+    const missing = ["Apply on the company site (resume is ready in JobPilot)"];
     await bg("api", { path: "/api/ext/result", method: "POST", body: { job_id: ev.job_id, outcome: "needs_you", apply_url: ext.url || "",
-      note: host ? `Applies on ${host}, which JobPilot can't fill in yet.` : "The company-site link didn't open.", missing } });
+      note: "The company-site link didn't open.", missing } });
     await bg("outcome", { outcome: "needs_you", jobId: ev.job_id, title: d.title, company: d.company, url: ext.url || jobUrl,
       missing, platform });
-    await log(`✋ Needs you: ${d.title} @ ${d.company} — ${host ? `applies on ${host}` : "company-site link didn't open"}`);
+    await log(`✋ Needs you: ${d.title} @ ${d.company} — the company-site link didn't open`);
     return { outcome: "needs_you" };
   }
 

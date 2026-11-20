@@ -32,10 +32,22 @@ from app.core.config import get_settings
 from app.core.database import bind_tenant
 from app.core.errors import DomainError
 from app.core.ratelimit import limiter
-from app.models import Application, CoverLetter, Job, JobMatch, ResumeVersion, ScreeningAnswer, User
+from app.models import (
+    Application,
+    CoverLetter,
+    Job,
+    JobMatch,
+    JobSource,
+    ResumeVersion,
+    ScreeningAnswer,
+    SiteAccount,
+    User,
+)
+from app.security.crypto import decrypt, encrypt
 from app.security.uploads import resolve_within
 from app.services import accounts, application_answers, cover_letters, discovery, tailoring
 from app.services import applications as svc
+from app.services.audit import audit
 from app.services.match_service import match_jobs
 from app.services.matching import total_experience_years
 from app.services.profiles import profile_to_dict, require_active_profile
@@ -546,6 +558,56 @@ def queue(db: DB, user: ExtUser, limit: int = 30) -> list[dict]:
         if len(out) >= max(1, min(limit, 100)):
             break
     return out
+
+
+# --------------------------------------------------------------------- employer careers-portal accounts
+
+class SiteAccountIn(BaseModel):
+    host: str = Field(min_length=3, max_length=255, pattern=r"^[A-Za-z0-9.-]+$")
+    email: str = Field(min_length=3, max_length=320)
+    password: str = Field(min_length=8, max_length=200)
+    verified: bool = False
+
+
+@router.get("/site-account")
+def get_site_account(host: str, db: DB, user: ExtUser) -> dict:
+    """The account the extension created on this careers portal (same host), if any."""
+    row = db.scalar(select(SiteAccount).where(SiteAccount.user_id == user.id, SiteAccount.host == host.lower()))
+    if row is None:
+        return {"exists": False}
+    return {"exists": True, "email": row.email, "password": decrypt(row.password_encrypted), "verified": row.verified}
+
+
+@router.put("/site-account", status_code=204)
+def put_site_account(body: SiteAccountIn, db: DB, user: ExtUser) -> None:
+    host = body.host.lower()
+    row = db.scalar(select(SiteAccount).where(SiteAccount.user_id == user.id, SiteAccount.host == host))
+    if row is None:
+        row = SiteAccount(user_id=user.id, host=host, email=body.email, password_encrypted=encrypt(body.password))
+        db.add(row)
+        audit(db, user.id, "site_account.created", target_type="site_account", data={"host": host})
+    else:
+        row.email, row.password_encrypted = body.email, encrypt(body.password)
+    row.verified = row.verified or body.verified
+    db.commit()
+
+
+@router.get("/verification")
+def verification(host: str, db: DB, user: ExtUser, since_minutes: int = 15) -> dict:
+    """Look in the connected mailbox for this portal's "verify your email" link or one-time code."""
+    from datetime import timedelta
+
+    from app.adapters.job_sources.email_alerts import EmailAlertsAdapter, find_verification
+
+    src = db.scalar(select(JobSource).where(JobSource.user_id == user.id, JobSource.kind == "email_alerts",
+                                            JobSource.enabled.is_(True)))
+    if src is None:
+        return {"error": "no_mailbox"}
+    since = datetime.now(UTC) - timedelta(minutes=max(1, min(since_minutes, 120)))
+    try:
+        return find_verification(EmailAlertsAdapter(credentials=discovery.source_credentials(src)), host.lower(), since)
+    except Exception as exc:  # noqa: BLE001
+        return {"error": type(exc).__name__}
 
 
 # ------------------------------------------------------------------------------------------ activity log

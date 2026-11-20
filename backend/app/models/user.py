@@ -3,7 +3,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Uuid
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint, Uuid
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.database import Base, TenantOwned, TimestampMixin, UUIDPk, utcnow
@@ -43,3 +43,16 @@ class PasswordResetToken(UUIDPk, Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class SiteAccount(UUIDPk, TenantOwned, TimestampMixin, Base):
+    """An account the extension created on an employer's careers portal (Workday etc.) to apply there.
+    The password is generated per site and stored encrypted so the user can sign in later."""
+
+    __tablename__ = "site_accounts"
+    __table_args__ = (UniqueConstraint("user_id", "host", name="uq_site_accounts_user_host"),)
+
+    host: Mapped[str] = mapped_column(String(255), nullable=False)
+    email: Mapped[str] = mapped_column(String(320), nullable=False)
+    password_encrypted: Mapped[str] = mapped_column(Text, nullable=False)
+    verified: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)

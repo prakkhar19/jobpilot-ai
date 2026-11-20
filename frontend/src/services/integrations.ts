@@ -7,6 +7,7 @@ import type {
   ScreeningAnswer,
   SourceCatalog,
   SourceInput,
+  SiteAccount,
   SourceTestResult,
 } from '@/types/api'
 import { api } from './api'
@@ -35,4 +36,8 @@ export const answerBankService = {
   upsert: (question_text: string, answer: string) =>
     api.post<ScreeningAnswer>('/api/screening-answers', { question_text, answer }),
   remove: (id: string) => api.delete(`/api/screening-answers/${id}`),
+}
+
+export const siteAccountService = {
+  list: () => api.get<SiteAccount[]>('/api/site-accounts'),
 }

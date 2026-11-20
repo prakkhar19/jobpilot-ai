@@ -888,3 +888,12 @@ export interface ApplyQueue {
   applied_today: number
   min_score: number
 }
+
+export interface SiteAccount {
+  id: string
+  host: string
+  email: string
+  password: string
+  verified: boolean
+  created_at: string
+}

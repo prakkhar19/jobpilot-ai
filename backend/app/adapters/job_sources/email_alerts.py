@@ -272,3 +272,72 @@ def _logout(conn: imaplib.IMAP4_SSL) -> None:
     except Exception:  # noqa: BLE001
         conn.shutdown()
 
+
+
+# ----------------------------------------------------------------- account-verification emails (careers portals)
+
+_VERIFY = re.compile(r"(?i)verif|confirm|activat|validat")
+_CODE = re.compile(r"(?i)(?:code|otp|pin)[^0-9]{0,40}\b(\d{4,8})\b|\b(\d{6})\b[^.]{0,40}(?:code|otp)")
+
+
+def base_domain(host: str) -> str:
+    parts = host.lower().strip(".").split(".")
+    if len(parts) >= 3 and len(parts[-1]) == 2 and parts[-2] in {"co", "com", "org", "net", "gov", "ac"}:
+        return ".".join(parts[-3:])
+    return ".".join(parts[-2:])
+
+
+# Platforms that host many employers on one domain: there, only the employer's own host counts.
+SHARED_PLATFORMS = {"myworkdayjobs.com", "myworkday.com", "workday.com", "successfactors.com", "successfactors.eu",
+                    "taleo.net", "icims.com", "oraclecloud.com", "darwinbox.in", "darwinbox.com", "zohorecruit.com",
+                    "zohorecruit.in", "keka.com", "freshteam.com", "smartrecruiters.com", "greenhouse.io", "lever.co",
+                    "ashbyhq.com", "workable.com", "jobvite.com", "brassring.com", "avature.net", "eightfold.ai"}
+
+
+def verification_match_key(host: str) -> str:
+    base = base_domain(host)
+    return host.lower() if base in SHARED_PLATFORMS else base
+
+
+def find_verification(adapter: EmailAlertsAdapter, host: str, since: datetime) -> dict:
+    """Newest email (after ``since``) with an account-verification link for ``host``, or a one-time code.
+    Read-only: messages stay unread."""
+    want = verification_match_key(host)
+    conn = adapter._connect()
+    try:
+        status, _ = conn.select("INBOX", readonly=True)
+        if status != "OK":
+            return {}
+        status, data = conn.search(None, "SINCE", since.strftime("%d-%b-%Y"))
+        ids = data[0].split() if status == "OK" and data and data[0] else []
+        for msg_id in reversed(ids[-40:]):
+            status, parts = conn.fetch(msg_id, "(BODY.PEEK[])")
+            if status != "OK" or not parts or not isinstance(parts[0], tuple):
+                continue
+            msg = email.message_from_bytes(parts[0][1])
+            try:
+                received = parsedate_to_datetime(msg.get("Date"))
+            except (TypeError, ValueError):
+                received = None
+            if received is None or received < since:
+                continue
+            sender = parseaddr(_decode(msg.get("From")))[1].lower()
+            subject = _decode(msg.get("Subject"))
+            html = _html_body(msg)
+            related = want in sender or want in html.lower()
+            soup = BeautifulSoup(html, "html.parser")
+            for a in soup.find_all("a", href=True):
+                href = a["href"].strip()
+                if not href.startswith("https://"):
+                    continue
+                link_host = href.split("/")[2].lower()
+                if (want in link_host and (_VERIFY.search(href) or _VERIFY.search(a.get_text(" ")))) or (
+                        related and _VERIFY.search(a.get_text(" ") + " " + subject) and _VERIFY.search(href + a.get_text(" "))):
+                    return {"url": href, "subject": subject[:200]}
+            if related and _VERIFY.search(subject):
+                m = _CODE.search(soup.get_text(" "))
+                if m:
+                    return {"code": m.group(1) or m.group(2), "subject": subject[:200]}
+        return {}
+    finally:
+        _logout(conn)

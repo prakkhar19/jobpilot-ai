@@ -277,3 +277,16 @@ def delete_answer(answer_id: uuid.UUID, db: DB, user: CurrentUser) -> Response:
     db.delete(row)
     db.commit()
     return Response(status_code=204)
+
+
+# ------------------------------------------------------------------- careers-portal accounts (extension)
+
+@router.get("/site-accounts")
+def list_site_accounts(db: DB, user: CurrentUser) -> list[dict]:
+    """Accounts the extension created on employer careers portals, so you can sign in to check an application."""
+    from app.models import SiteAccount
+    from app.security.crypto import decrypt
+
+    rows = db.scalars(select(SiteAccount).where(SiteAccount.user_id == user.id).order_by(SiteAccount.created_at.desc())).all()
+    return [{"id": str(r.id), "host": r.host, "email": r.email, "password": decrypt(r.password_encrypted),
+             "verified": r.verified, "created_at": r.created_at.isoformat()} for r in rows]

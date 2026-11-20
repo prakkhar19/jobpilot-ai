@@ -20,12 +20,12 @@ from app.models.system import (
     Notification,
     WorkerHeartbeat,
 )
-from app.models.user import PasswordResetToken, User, UserSession
+from app.models.user import PasswordResetToken, SiteAccount, User, UserSession
 
 __all__ = [
     "AIProviderConfiguration", "AgentConfiguration", "AgentExecutionLog", "AgentTask", "Application",
     "ApplicationEvent", "AuditLog", "CandidateProfile", "Certification", "CoverLetter", "Education",
     "Interview", "Job", "JobMatch", "JobRequirement", "JobSource", "MasterResume", "Notification",
-    "PasswordResetToken", "Project", "ResumeVersion", "SavedJob", "ScreeningAnswer", "Skill", "User",
+    "PasswordResetToken", "Project", "ResumeVersion", "SavedJob", "ScreeningAnswer", "SiteAccount", "Skill", "User",
     "UserSession", "WorkExperience", "WorkerHeartbeat",
 ]

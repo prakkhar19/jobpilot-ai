@@ -26,17 +26,41 @@ const DEFAULTS = {
   log: [],
 };
 
-const STEP_TIMEOUT_MIN = { "linkedin-search": 3, "linkedin-job": 5, "naukri-search": 3, "naukri-job": 4, "instahyre": 20, ats: 5,
+const STEP_TIMEOUT_MIN = { "linkedin-search": 3, "linkedin-job": 5, "naukri-search": 3, "naukri-job": 4, "instahyre": 20, ats: 12,
   "linkedin-outreach": 6 };
 
-// Employer application systems the ats.js content script can fill in (keep in sync with manifest.json).
-const SUPPORTED_ATS = /^https:\/\/([a-z0-9-]+\.)*(greenhouse\.io|lever\.co|ashbyhq\.com|workable\.com|smartrecruiters\.com)\//i;
 let external = null; // { opener, tab, url, done, at } while following an "Apply on company site" click
 
 chrome.tabs.onCreated.addListener((tab) => {
   if (external && !external.done && tab.openerTabId === external.opener && external.tab == null) external.tab = tab.id;
 });
 let settleTimer = null;
+// Employer pages: load the generic form filler (content/ats.js) into every frame once the page has loaded. Count page
+// loads per step so a site that keeps redirecting can't trap the loop.
+const MAX_ATS_PAGES = 14;
+let frameClaim = { key: "", frameId: null };
+chrome.tabs.onUpdated.addListener(async (tabId, info) => {
+  if (info.status !== "complete") return;
+  const s = await state();
+  if (!s.running || tabId !== s.workerTabId) return;
+  const step = s.steps[s.stepIndex];
+  if (!step || step.kind !== "ats") return;
+  const steps = [...s.steps];
+  steps[s.stepIndex] = { ...step, hops: (step.hops || 0) + 1 };
+  await set({ steps });
+  if (steps[s.stepIndex].hops > MAX_ATS_PAGES) {
+    await log(`⚠️ ${step.label}: too many page changes on ${new URL((await chrome.tabs.get(tabId)).url).hostname} — giving up on this one.`);
+    if (step.jobId) {
+      await api("/api/ext/result", { method: "POST", body: { job_id: step.jobId, outcome: "failed",
+        note: "The careers site kept redirecting." } }).catch(() => {});
+    }
+    return advance();
+  }
+  try {
+    await chrome.scripting.executeScript({ target: { tabId, allFrames: true }, files: ["content/common.js", "content/ats.js"] });
+  } catch (e) { await log(`Could not open the form on this page: ${e.message}`); }
+});
+
 const JOB_BOARDS = /^https:\/\/([a-z0-9-]+\.)*(linkedin\.com|naukri\.com)\//i;
 chrome.tabs.onUpdated.addListener(async (tabId, info, tab) => {
   // Same-tab case: the job page itself navigated to the employer, so its content script is gone. Take over here.
@@ -46,19 +70,11 @@ chrome.tabs.onUpdated.addListener(async (tabId, info, tab) => {
     external = null;
     const s = await state();
     const job = ex.job || {};
-    if (SUPPORTED_ATS.test(info.url) && job.jobId) {
+    if (job.jobId) {
       const steps = [...s.steps];
       steps[s.stepIndex] = { kind: "ats", url: info.url, jobId: job.jobId, label: `${job.company}: ${job.title}` };
       await set({ steps, stepStartedAt: Date.now() }); // ats.js on the employer page picks this up
       await log(`Company site: ${new URL(info.url).hostname} — applying there.`);
-    } else if (job.jobId) {
-      await log(`Company site ${new URL(info.url).hostname} isn't one JobPilot can fill in yet — added to Needs you.`);
-      await api("/api/ext/result", { method: "POST", body: { job_id: job.jobId, outcome: "needs_you", apply_url: info.url,
-        note: "Applies on the employer's own site.", missing: ["Apply on the company site (resume is ready in JobPilot)"] } }).catch(() => {});
-      await handle({ type: "outcome", outcome: "needs_you", jobId: job.jobId, title: job.title, company: job.company,
-        url: info.url, missing: ["Apply on the company site"], platform: "company" }, {});
-      await set({ workerTabId: null }); // leave that page open for you
-      advance();
     }
     return;
   }
@@ -321,7 +337,33 @@ async function handle(msg, sender) {
       external = null;
       if (got?.tab != null) chrome.tabs.remove(got.tab).catch(() => {});
       const url = got?.url || "";
-      return { url, supported: SUPPORTED_ATS.test(url) };
+      return { url, supported: /^https?:/.test(url) && !JOB_BOARDS.test(url) };
+    }
+
+    // Several frames may hold a form (careers sites embed the application in an iframe): one wins per page load.
+    case "claimFrame": {
+      const s = await state();
+      const step = s.steps[s.stepIndex];
+      if (tabId !== s.workerTabId || !step) return { ok: false };
+      const key = `${s.stepIndex}:${step.hops || 0}`;
+      if (frameClaim.key !== key) frameClaim = { key, frameId: sender.frameId ?? 0 };
+      return { ok: frameClaim.frameId === (sender.frameId ?? 0) };
+    }
+
+    // Open a link (e.g. "verify your email") in a background tab, let it load, close it.
+    case "openAndClose": {
+      const tab = await chrome.tabs.create({ url: msg.url, active: false });
+      const until = Date.now() + 30000;
+      let finalUrl = msg.url;
+      while (Date.now() < until) {
+        await new Promise((r) => setTimeout(r, 1000));
+        const t = await chrome.tabs.get(tab.id).catch(() => null);
+        if (!t) break;
+        finalUrl = t.url || finalUrl;
+        if (t.status === "complete") { await new Promise((r) => setTimeout(r, 4000)); break; }
+      }
+      chrome.tabs.remove(tab.id).catch(() => {});
+      return { finalUrl };
     }
 
     // Remember a click on Apply so the next page (after a redirect) can confirm it.
