@@ -126,12 +126,6 @@
       return bg("outcome", { outcome: "skipped" });
     }
     if (!apply && companySite) {
-      const direct = await employerUrl();
-      if (direct) {
-        await log(`Applying (${ev.score}) on the company site: ${d.title} @ ${d.company} → ${new URL(direct).hostname}`);
-        await bg("insertSteps", { steps: [{ kind: "ats", url: direct, jobId: ev.job_id, label: `${d.company}: ${d.title} (${ev.score})` }] });
-        return;
-      }
       await window.JP.viaCompanySite(companySite, ev, d, "naukri", location.href.split("?")[0]);
       return;
     }
@@ -143,25 +137,6 @@
     const res = await afterApply(ev.job_id);
     await bg("setPending", { pending: null });
     await report(pending, res);
-  }
-
-  // Naukri's job data has the employer's application link for "Apply on company site" jobs.
-  async function employerUrl() {
-    const id = (location.pathname.match(/-(\d{9,})(?:$|[/?#])/) || location.href.match(/-(\d{9,})/) || [])[1];
-    if (!id) return "";
-    try {
-      const r = await fetch(`/jobapi/v4/job/${id}?microsite=y`, { credentials: "include",
-        headers: { appid: "121", systemid: "Naukri", clientid: "d3skt0p", accept: "application/json" } });
-      if (!r.ok) { await log(`Naukri job data: HTTP ${r.status}`); return ""; }
-      const j = await r.json();
-      const jd = j.jobDetails || j;
-      const url = jd.applyRedirectUrl || jd.companyApplyUrl || jd.applyUrl || jd.redirectUrl || "";
-      if (!url) await log(`Naukri job data has no employer link (keys: ${Object.keys(jd).filter((k) => /apply|redirect|url/i.test(k)).join(", ") || "none"}).`);
-      return /^https?:/.test(url) && !/naukri\.com/.test(new URL(url).hostname) ? url : "";
-    } catch (e) {
-      await log(`Naukri job data failed: ${e.message}`);
-      return "";
-    }
   }
 
   async function report(p, res) {

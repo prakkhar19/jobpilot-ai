@@ -398,6 +398,15 @@ async function handle(msg, sender) {
     // close it, and continue there in the worker tab with ats.js.
     case "finishExternal": {
       const good = (u) => /^https?:/.test(u || "") && !JOB_BOARDS.test(u);
+      // Naukri's redirect endpoint (records the apply, then forwards to the employer): open it in the worker tab and let
+      // the same-tab capture below take the employer page it lands on.
+      const hop = [msg.url, external?.url].find((u) => /naukri\.com\/cloudgateway-apply\/|naukri\.com\/.*(redirect|companyapply)/i.test(u || ""));
+      if (hop && external) {
+        external = { ...external, tab: null, url: "", done: false, at: Date.now(), awaiting: false };
+        await log("Following Naukri's redirect to the company site…");
+        chrome.tabs.update(tabId, { url: hop });
+        return { url: hop, following: true };
+      }
       if (external && good(msg.url) && !good(external.url)) { external.url = msg.url; external.viaOpen = true; }
       const until = Date.now() + 15000;
       while (Date.now() < until && !(external && good(external.url) && (external.viaOpen || external.tab != null))) {

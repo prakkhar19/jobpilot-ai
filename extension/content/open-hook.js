@@ -9,7 +9,9 @@
   const record = (u) => {
     try {
       const url = new URL(String(u), location.href).href;
-      if (!/^https?:/.test(url) || /(^|\.)(naukri|linkedin|ambitionbox)\.com$/.test(new URL(url).hostname)) return;
+      const h = new URL(url).hostname;
+      const naukriRedirect = /naukri\.com\/cloudgateway-apply\/|companyapply/i.test(url);
+      if (!/^https?:/.test(url) || (/(^|\.)(naukri|linkedin|ambitionbox)\.com$/.test(h) && !naukriRedirect)) return;
       sessionStorage.setItem("jpOpened", url);
       window.postMessage({ jpOpened: url }, "*");
     } catch (_) { /* ignore */ }
