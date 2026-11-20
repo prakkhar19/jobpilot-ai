@@ -307,6 +307,7 @@ async function handle(msg, sender) {
       else if (o === "outreach") s.stats.outreach += 1;
       else s.stats.skipped += 1;
       const patch = { stats: s.stats };
+      if (o === "submitted" && msg.jobId) patch.needsYou = s.needsYou.filter((n) => n.jobId !== msg.jobId);
       if (o === "needs_you") {
         patch.needsYou = [{ jobId: msg.jobId, title: msg.title, company: msg.company, url: msg.url,
           missing: msg.missing || [], at: Date.now() }, ...s.needsYou.filter((n) => n.jobId !== msg.jobId)].slice(0, 200);

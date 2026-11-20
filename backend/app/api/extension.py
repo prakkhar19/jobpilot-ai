@@ -547,17 +547,32 @@ def queue(db: DB, user: ExtUser, limit: int = 30) -> list[dict]:
     from app.api.apply_queue import _queue_rows
 
     cfg = get_config(db, user.id)
-    out = []
+    out: list[dict] = []
+    seen: set[uuid.UUID] = set()
+    # Already accepted for applying but parked only because they apply on the company site: the extension does
+    # those itself now, so they go first (whatever the current score threshold).
+    parked = db.execute(select(Application, Job).join(Job, Job.id == Application.job_id)
+                        .where(Application.user_id == user.id, Application.status == "needs_input",
+                               Job.hidden.is_(False), Job.status != "expired")
+                        .order_by(Application.match_score.desc().nulls_last())).all()
+    for app, job in parked:
+        step = queue_step(job) if _company_site_only(app) else None
+        if step:
+            seen.add(job.id)
+            out.append({"job_id": str(job.id), "title": job.title, "company": job.company,
+                        "score": round(app.match_score or 0, 1), **step})
     for job, score, app in _queue_rows(db, user, cfg.min_match_score):
-        if app is not None and app.status == "needs_input":
-            continue
+        if job.id in seen or (app is not None and app.status == "needs_input"):
+            continue  # needs_input here = waiting for an answer only you can give
         step = queue_step(job)
-        if step is None:
-            continue
-        out.append({"job_id": str(job.id), "title": job.title, "company": job.company, "score": round(score, 1), **step})
-        if len(out) >= max(1, min(limit, 100)):
-            break
-    return out
+        if step:
+            out.append({"job_id": str(job.id), "title": job.title, "company": job.company, "score": round(score, 1), **step})
+    return out[: max(1, min(limit, 100))]
+
+
+def _company_site_only(app: Application) -> bool:
+    labels = [str(m.get("label") or m.get("name") or "") for m in (app.missing_fields or [])]
+    return bool(labels) and all(re.search(r"(?i)company site|company website", lbl) for lbl in labels)
 
 
 # --------------------------------------------------------------------- employer careers-portal accounts

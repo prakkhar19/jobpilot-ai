@@ -162,3 +162,18 @@ def test_area_years():
     assert _mentions("How many years of experience do you have in Aiml?", skills)
     assert _mentions("How many years of experience do you have in Open Api?", skills)
     assert not _mentions("How many years of experience do you have in SAP ABAP?", skills)
+
+
+def test_queue_retries_company_site_jobs_first(client, anon):
+    h = _ext(client, anon)
+    first = anon.post("/api/ext/evaluate", json=_job(), headers=h).json()
+    second = anon.post("/api/ext/evaluate", json=_job() | {"url": "https://www.linkedin.com/jobs/view/456",
+                                                           "company": "Other Corp"}, headers=h).json()
+    anon.post("/api/ext/result", headers=h, json={"job_id": first["job_id"], "outcome": "needs_you",
+                                                  "missing": ["Apply on the company site (resume is ready in JobPilot)"]})
+    anon.post("/api/ext/result", headers=h, json={"job_id": second["job_id"], "outcome": "needs_you",
+                                                  "missing": ["Please select your English level"]})
+    q = anon.get("/api/ext/queue", headers=h).json()
+    ids = [i["job_id"] for i in q]
+    assert ids and ids[0] == first["job_id"]  # parked for the company site → retried first
+    assert second["job_id"] not in ids  # waiting for an answer only the user has
