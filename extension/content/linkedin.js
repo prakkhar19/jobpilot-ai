@@ -214,6 +214,9 @@
     }
     await log(`Applying (${ev.score}): ${d.title} @ ${d.company}`);
     await log(`EASY-BTN ${easy.tagName} "${text(easy).slice(0, 40)}" aria=${(easy.getAttribute("aria-label") || "").slice(0, 60)} href=${(easy.getAttribute("href") || "").slice(0, 120)} inFrame=${easy.ownerDocument !== document}`);
+    const allText = () => deepAll(document, "body").map((b) => b.innerText || "").join("\n");
+    const beforeLines = new Set(allText().split("\n").map((l) => l.trim()).filter(Boolean));
+    const urlBefore = location.href;
     easy.click();
     if (!(await waitFor(modal, 4000))) {
       const r = await tclick(easy);
@@ -222,6 +225,9 @@
         const host = document.querySelector("[data-testid='interop-shadowdom']");
         let sr = null;
         try { sr = host && chrome.dom?.openOrClosedShadowRoot(host); } catch (_) { /* ignore */ }
+        const fresh = [...new Set(allText().split("\n").map((l) => l.trim()).filter((l) => l && !beforeLines.has(l)))].slice(0, 25);
+        const toast = deepAll(document, "[data-testid='toasts-title'], [role='alert'], [aria-live]").map((t) => text(t)).filter(Boolean).slice(0, 5);
+        await log(`EASY-AFTER urlChanged=${location.href !== urlBefore} url=${location.href.slice(0, 120)} toast=${JSON.stringify(toast).slice(0, 300)} new=${JSON.stringify(fresh).slice(0, 1000)}`);
         await log(`EASY-SHADOW host=${!!host} root=${!!sr} kids=${sr ? sr.childElementCount : 0} text="${sr ? text(sr).slice(0, 200) : ""}"`);
       }
     }
