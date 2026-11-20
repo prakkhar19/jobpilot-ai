@@ -63,8 +63,11 @@ chrome.tabs.onUpdated.addListener(async (tabId, info) => {
 
 const JOB_BOARDS = /^https:\/\/([a-z0-9-]+\.)*(linkedin\.com|naukri\.com)\//i;
 chrome.tabs.onUpdated.addListener(async (tabId, info, tab) => {
+  if (external && !external.done && info.url && (tabId === external.opener || tabId === external.tab)) {
+    log(`  company-site link → ${tabId === external.opener ? "same tab" : "new tab"}: ${info.url.split("?")[0].slice(0, 140)}`);
+  }
   // Same-tab case: the job page itself navigated to the employer, so its content script is gone. Take over here.
-  if (external && !external.done && external.tab == null && tabId === external.opener && info.url
+  if (external && !external.done && Date.now() - external.at < 90000 && external.tab == null && tabId === external.opener && info.url
       && /^https?:/.test(info.url) && !JOB_BOARDS.test(info.url)) {
     const ex = external;
     external = null;
@@ -250,6 +253,7 @@ async function runStep() {
 }
 
 async function advance({ keepTab = false } = {}) {
+  external = null;
   const s = await state();
   const patch = { stepIndex: s.stepIndex + 1 };
   if (keepTab) patch.workerTabId = null; // leave this tab for the user; continue in a fresh one
@@ -292,6 +296,10 @@ async function handle(msg, sender) {
     case "getTask": {
       const s = await state();
       if (!s.running || tabId == null || tabId !== s.workerTabId) return { task: null };
+      if (external && !external.done && external.opener === tabId && Date.now() - external.at < 90000) {
+        await log(`…following the company-site link (${(sender.url || "").split("?")[0].slice(0, 120)})`);
+        return { task: null }; // an in-between page (e.g. a job-board redirect): wait for the employer's page
+      }
       const step = s.steps[s.stepIndex];
       if (!step) return { task: null };
       return { task: step, settings: s.settings, config: s.lastConfig, remaining: s.settings.dailyCap - s.stats.applied,

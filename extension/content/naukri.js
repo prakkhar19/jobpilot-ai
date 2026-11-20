@@ -68,7 +68,10 @@
     await waitFor("h1", 12000);
     await sleep(1500);
     const d = details();
-    if (!d.title || !d.company) return log("Could not read this Naukri job.");
+    if (!d.title || !d.company) {
+      await log(`Could not read this Naukri job (${location.pathname.slice(0, 100)}).`);
+      return debugDump("naukri-job");
+    }
     if (byText("button, span", /^Applied$/i)) {
       // Already applied on Naukri (maybe by an earlier run that got cut off): make sure JobPilot records it.
       const ev = await bg("api", { path: "/api/ext/evaluate", method: "POST",
