@@ -93,8 +93,10 @@ def map_candidate_data(fields: list[FormField], profile: dict, answer_bank: dict
     answers: dict = {k: v for k, v in (existing or {}).items() if v.get("source") == "user"}
     full = (profile.get("full_name") or "").strip()
     first, _, last = full.partition(" ")
-    derived = {"first_name": first, "last_name": last.strip(), "full_name": full}
     facts = {normalize_label(k): str(v) for k, v in (profile.get("application_facts") or {}).items() if str(v).strip()}
+    # Single-name candidates: the "Last name" application fact says what forms should get (often the name again).
+    last = last.strip() or facts.get("last name") or facts.get("surname") or ""
+    derived = {"first_name": first, "last_name": last, "full_name": full}
     missing: list[dict] = []
     for f in fields:
         if f.name in answers:

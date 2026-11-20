@@ -189,3 +189,14 @@ def test_location_parts():
     assert _location_part("Country code", loc) is None
     assert _location_part("State", "Gurugram, India") == "Haryana"
     assert _location_part("Why this role?", loc) is None
+
+
+def test_single_name_uses_last_name_fact():
+    from app.adapters.application_providers.base import FormField, map_candidate_data
+
+    fields = [FormField(name="ln", label="Surname", type="text", required=True, options=[]),
+              FormField(name="fn", label="First Name", type="text", required=True, options=[])]
+    got, missing = map_candidate_data(fields, {"full_name": "Prakhar", "application_facts": {"Last name": "Prakhar"}}, {})
+    assert got["ln"]["value"] == "Prakhar" and got["fn"]["value"] == "Prakhar" and not missing
+    _, missing = map_candidate_data(fields[:1], {"full_name": "Prakhar"}, {})
+    assert missing  # never invented without the fact
