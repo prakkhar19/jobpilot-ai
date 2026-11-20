@@ -61,7 +61,7 @@ chrome.tabs.onUpdated.addListener(async (tabId, info) => {
   } catch (e) { await log(`Could not open the form on this page: ${e.message}`); }
 });
 
-const JOB_BOARDS = /^https:\/\/([a-z0-9-]+\.)*(linkedin\.com|naukri\.com)\//i;
+const JOB_BOARDS = /^https:\/\/([a-z0-9-]+\.)*(linkedin\.com|naukri\.com|ambitionbox\.com|iimjobs\.com|naukimg\.com)\//i;
 chrome.tabs.onUpdated.addListener(async (tabId, info, tab) => {
   if (external && !external.done && info.url && (tabId === external.opener || tabId === external.tab)) {
     log(`  company-site link → ${tabId === external.opener ? "same tab" : "new tab"}: ${info.url.split("?")[0].slice(0, 140)}`);

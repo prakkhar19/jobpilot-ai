@@ -7,28 +7,27 @@
 
   await sleep(2500);
 
-  // Naukri's own "apply on company site" page (/myapply/showAcp) sits between the job and the employer: go through it.
+  // Naukri's apply-confirmation page (/myapply/showAcp?multiApplyResp={"<jobId>":<status>}). Clicking "Apply on company
+  // site" on some jobs lands here: Naukri records the application itself and shows its status message.
   if (/\/myapply\/showacp/i.test(location.pathname)) {
     let hop;
     try { hop = await bg("externalHop"); } catch (_) { return; }
-    if (!hop.active) return;
-    await sleep(1500);
-    await debugDump("naukri-acp");
-    const SOCIAL = /(^|\.)(naukri|naukimg|facebook|twitter|x|linkedin|instagram|youtube|google|apple|infoedge)\.(com|in)$/i;
-    const links = [...document.querySelectorAll("a[href]")].filter((a) => visible(a) && /^https?:/.test(a.href)
-      && !SOCIAL.test(new URL(a.href).hostname));
-    const go = links.find((a) => /apply|continue|proceed|company|visit|career|redirect/i.test(text(a) + " " + a.href)) || links[0];
-    const btn = byText("button, a, [role='button']", /continue|proceed|go to (the )?company|apply on company|visit (the )?(company|site|website)|redirect|^apply( now)?$/i);
-    if (go) {
-      await log(`→ company link on Naukri's page: ${go.href.split("?")[0].slice(0, 140)}`);
-      location.href = go.href;
-    } else if (btn) {
-      await log(`Clicking "${text(btn).slice(0, 40)}" on Naukri's company-site page`);
-      btn.click();
-    } else {
-      await log("Naukri's company-site page has nothing to click — see the DUMP lines.");
-    }
-    return;
+    if (!hop.active || !hop.job) return;
+    await waitFor(".apply-status-header, .apply-message", 8000);
+    const message = `${text(document.querySelector(".apply-status-header"))} ${text(document.querySelector(".apply-message"))}`.trim();
+    const status = (decodeURIComponent(location.search).match(/"\d+"\s*:\s*(\d+)/) || [])[1] || "";
+    await log(`Naukri says: "${message.slice(0, 200)}" (status ${status || "?"})`);
+    const job = hop.job;
+    const ok = /applied|success|sent|submitted/i.test(message) && !/fail|error|unable|could not|not applied/i.test(message);
+    const res = ok ? { outcome: "submitted", note: `Applied via Naukri: ${message.slice(0, 300)}` }
+      : { outcome: "needs_you", note: `Naukri: ${message.slice(0, 300) || "no status message"}`,
+          missing: [message ? `Naukri said: ${message.slice(0, 120)}` : "Apply on the company site"] };
+    await bg("api", { path: "/api/ext/result", method: "POST", body: { job_id: job.jobId, outcome: res.outcome, note: res.note,
+      missing: res.missing || [] } }).catch(() => {});
+    await bg("outcome", { outcome: res.outcome, jobId: job.jobId, title: job.title, company: job.company,
+      url: location.href, missing: res.missing, platform: "naukri" });
+    await log(`${ok ? "✅ Applied" : "✋ Needs you"}: ${job.title} @ ${job.company}`);
+    return bg("stepDone", {});
   }
 
   let ctx;
