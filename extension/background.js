@@ -360,20 +360,59 @@ async function handle(msg, sender) {
       const active = !!(external && !external.done && external.opener === tabId && tabId === s.workerTabId);
       return { active, job: active ? external.job : null };
     }
+    // Before clicking "Apply on company site": wrap the page's window.open (in the page itself, not our sandbox) so the
+    // employer URL is captured even though Chrome blocks the pop-up (our click isn't a real user gesture).
+    case "hookOpen": {
+      await chrome.scripting.executeScript({ target: { tabId, frameIds: [sender.frameId ?? 0] }, world: "MAIN", func: () => {
+        if (window.__jpOpenHooked) return;
+        window.__jpOpenHooked = true;
+        const record = (u) => {
+          try {
+            const url = new URL(String(u), location.href).href;
+            if (!/^https?:/.test(url)) return;
+            sessionStorage.setItem("jpOpened", url);
+            window.postMessage({ jpOpened: url }, "*");
+          } catch (_) { /* ignore */ }
+        };
+        const fakeWindow = () => {
+          const loc = { assign: record, replace: record };
+          Object.defineProperty(loc, "href", { set: record, get: () => "about:blank" });
+          const w = { closed: false, opener: null, focus() {}, blur() {}, close() { this.closed = true; }, document: { write() {}, close() {} } };
+          Object.defineProperty(w, "location", { set: record, get: () => loc });
+          return w;
+        };
+        window.open = function (u) { if (u) record(u); return fakeWindow(); };
+        document.addEventListener("click", (e) => {
+          const a = e.target.closest && e.target.closest("a[target='_blank'][href]");
+          if (a && !/naukri\.com|linkedin\.com/.test(new URL(a.href, location.href).hostname)) record(a.href);
+        }, true);
+      } });
+      return {};
+    }
+    case "externalUrl": {
+      if (external && !external.done && !JOB_BOARDS.test(msg.url || "")) { external.url = msg.url; external.viaOpen = true; }
+      return {};
+    }
+
     // The job board's own page says it sent you to the employer (Naukri "showAcp"): take the employer tab it opened,
     // close it, and continue there in the worker tab with ats.js.
     case "finishExternal": {
+      const good = (u) => /^https?:/.test(u || "") && !JOB_BOARDS.test(u);
+      if (external && good(msg.url) && !good(external.url)) { external.url = msg.url; external.viaOpen = true; }
       const until = Date.now() + 15000;
-      while (Date.now() < until && !(external && external.tab != null && /^https?:/.test(external.url) && !JOB_BOARDS.test(external.url))) {
+      while (Date.now() < until && !(external && good(external.url) && (external.viaOpen || external.tab != null))) {
         await new Promise((r) => setTimeout(r, 500));
       }
       const ex = external;
       external = null;
-      if (!ex || ex.tab == null || !/^https?:/.test(ex.url) || JOB_BOARDS.test(ex.url)) return { url: "" };
-      await new Promise((r) => setTimeout(r, 2500)); // let tracking redirects finish
-      const t = await chrome.tabs.get(ex.tab).catch(() => null);
-      const url = (t && /^https?:/.test(t.url || "") && !JOB_BOARDS.test(t.url)) ? t.url : ex.url;
-      chrome.tabs.remove(ex.tab).catch(() => {});
+      if (!ex || !good(ex.url)) return { url: "" };
+      let url = ex.url;
+      if (ex.tab != null) {
+        await new Promise((r) => setTimeout(r, 2500)); // let tracking redirects finish
+        const t = await chrome.tabs.get(ex.tab).catch(() => null);
+        if (t && good(t.url)) url = t.url;
+        chrome.tabs.remove(ex.tab).catch(() => {});
+      }
       const s = await state();
       const steps = [...s.steps];
       steps[s.stepIndex] = { kind: "ats", url, jobId: ex.job?.jobId, label: `${ex.job?.company}: ${ex.job?.title}` };
@@ -385,7 +424,10 @@ async function handle(msg, sender) {
     case "awaitExternal": {
       if (external) external.awaiting = true;
       const until = Date.now() + (msg.timeoutMs || 20000);
-      while (Date.now() < until && !(external && external.done)) await new Promise((r) => setTimeout(r, 500));
+      while (Date.now() < until && !(external && (external.done || (external.viaOpen && external.url)))) {
+        await new Promise((r) => setTimeout(r, 500));
+      }
+      if (external?.viaOpen && external.tab == null) await new Promise((r) => setTimeout(r, 1500));
       const got = external;
       external = null;
       if (got?.tab != null) chrome.tabs.remove(got.tab).catch(() => {});

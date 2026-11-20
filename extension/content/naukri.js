@@ -19,7 +19,9 @@
     await log(`Naukri says: "${message.slice(0, 200)}" (status ${status || "?"})`);
     const job = hop.job;
     if (/redirected to the company|company'?s? (web)?site/i.test(message)) {
-      const ext = await bg("finishExternal");
+      let opened = "";
+      try { opened = sessionStorage.getItem("jpOpened") || ""; sessionStorage.removeItem("jpOpened"); } catch (_) { /* ignore */ }
+      const ext = await bg("finishExternal", { url: opened });
       if (ext.url) return; // the worker tab now goes to the employer's page; ats.js applies there
       await log("Naukri opened the company site but the tab wasn't caught.");
     }
