@@ -199,9 +199,10 @@
     await log(`Applying (${ev.score}): ${d.title} @ ${d.company}`);
     await log(`EASY-BTN ${easy.tagName} "${text(easy).slice(0, 40)}" aria=${(easy.getAttribute("aria-label") || "").slice(0, 60)} href=${(easy.getAttribute("href") || "").slice(0, 120)} inFrame=${easy.ownerDocument !== document}`);
     easy.click();
-    if (!(await waitFor(modal, 5000))) {
-      realClick(easy);
-      if (!(await waitFor(modal, 5000))) {
+    if (!(await waitFor(modal, 4000))) {
+      const r = await tclick(easy);
+      if (!r.ok) await log(`Trusted click failed: ${r.error || "?"}`);
+      if (!(await waitFor(modal, 6000))) {
         const host = document.querySelector("[data-testid='interop-shadowdom']");
         let sr = null;
         try { sr = host && chrome.dom?.openOrClosedShadowRoot(host); } catch (_) { /* ignore */ }
@@ -209,6 +210,18 @@
       }
     }
     return finishEasy(ev, d, jobUrl, false);
+  }
+
+  // A real mouse click (via the extension's debugger access) on an element of this tab, including elements inside
+  // the same-origin page frame (their coordinates are offset by the frame's position).
+  async function tclick(el) {
+    el.scrollIntoView({ block: "center" });
+    await sleep(400);
+    const r = el.getBoundingClientRect();
+    let x = r.left + r.width / 2, y = r.top + r.height / 2;
+    const fe = el.ownerDocument.defaultView?.frameElement;
+    if (fe) { const fr = fe.getBoundingClientRect(); x += fr.left; y += fr.top; }
+    return bg("trustedClick", { x, y });
   }
 
   // Pointer + mouse events with coordinates, for buttons that ignore a bare .click().
@@ -352,8 +365,10 @@
       const next = m.querySelector("button[aria-label*='Continue to next step']") || byText("button", /^Next$/i, m);
       const btn = submit || review || next;
       if (!btn) return { outcome: "failed", note: "No Next/Submit button found." };
+      const before = text(m).slice(0, 300);
       btn.click();
-      await sleep(2000);
+      await sleep(1500);
+      if (modal() && text(modal()).slice(0, 300) === before) { await tclick(btn); await sleep(1000); }
       if (submit) {
         const done = await waitFor(() => !modal() || /application (was )?sent|applied/i.test(text(modal())), 10000);
         await closeModal();

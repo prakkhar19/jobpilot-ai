@@ -419,6 +419,27 @@ async function handle(msg, sender) {
       return { url: msg.url };
     }
 
+    // A real (trusted) mouse click at page coordinates, via the DevTools protocol: LinkedIn's newer pages ignore
+    // script clicks (event.isTrusted). Coordinates are CSS pixels in the tab's viewport.
+    case "trustedClick": {
+      if (tabId == null) return { ok: false };
+      const target = { tabId };
+      try {
+        await chrome.debugger.attach(target, "1.3").catch((e) => { if (!/already attached/i.test(e.message)) throw e; });
+        const ev = (type, extra = {}) => chrome.debugger.sendCommand(target, "Input.dispatchMouseEvent",
+          { type, x: msg.x, y: msg.y, button: "left", clickCount: 1, ...extra });
+        await ev("mouseMoved", { button: "none", clickCount: 0 });
+        await ev("mousePressed");
+        await new Promise((r) => setTimeout(r, 60));
+        await ev("mouseReleased");
+        return { ok: true };
+      } catch (e) {
+        return { ok: false, error: e.message };
+      } finally {
+        setTimeout(() => chrome.debugger.detach(target).catch(() => {}), 300);
+      }
+    }
+
     case "finishExternal": {
       const good = (u) => /^https?:/.test(u || "") && !JOB_BOARDS.test(u);
       // Naukri's redirect endpoint (records the apply, then forwards to the employer): open it in the worker tab and let
