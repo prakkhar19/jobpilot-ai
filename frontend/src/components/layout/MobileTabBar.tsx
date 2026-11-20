@@ -27,7 +27,7 @@ export function MobileTabBar() {
                 cn(
                   'flex flex-col items-center gap-1 rounded-2xl py-2 text-[11px] font-medium transition-colors',
                   isActive
-                    ? 'bg-[radial-gradient(circle_at_50%_0%,var(--glow),transparent_70%)] bg-surface-2/70 text-fg'
+                    ? 'bg-surface-2 text-fg'
                     : 'text-subtle hover:text-fg',
                 )
               }

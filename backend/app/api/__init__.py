@@ -7,6 +7,7 @@ from app.api import (
     apply_queue,
     auth,
     documents,
+    extension,
     health,
     jobs,
     mock_portal,
@@ -15,5 +16,6 @@ from app.api import (
 )
 
 router = APIRouter()
-for module in (health, auth, profiles, ai_providers, jobs, documents, applications, apply_queue, agent, system, mock_portal):
+for module in (health, auth, profiles, ai_providers, jobs, documents, applications, apply_queue, agent, system, mock_portal,
+               extension):
     router.include_router(module.router)

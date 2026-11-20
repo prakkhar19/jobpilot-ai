@@ -1,7 +1,7 @@
 import { Card, CardBody, CardHeader, CountUp } from '@/components/ui'
 import type { AnalyticsSummary } from '@/types/api'
 
-const COLORS = ['var(--primary)', 'color-mix(in srgb, var(--primary) 70%, var(--accent))', 'color-mix(in srgb, var(--primary) 40%, var(--accent))', 'var(--accent)', 'color-mix(in srgb, var(--accent) 50%, var(--accent-2))', 'var(--accent-2)']
+const COLORS = ['var(--lemon)', 'var(--lemon)', 'color-mix(in srgb, var(--lemon) 70%, var(--fg))', 'color-mix(in srgb, var(--lemon) 45%, var(--fg))', 'var(--fg)', 'var(--fg)']
 
 /** Funnel from discovered jobs to offers. Log-scaled so small stages stay visible next to thousands of jobs. */
 export function PipelineCard({ funnel }: { funnel: AnalyticsSummary['funnel'] }) {

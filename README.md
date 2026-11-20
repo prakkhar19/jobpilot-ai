@@ -9,7 +9,7 @@ Your data stays on your server. You bring your own AI provider (or none at all).
 > JobPilot never invents experience. Every AI-generated sentence is fact-checked against the profile
 > *you* approved; anything that adds skills, employers, numbers or credentials you don't have is rejected.
 
-![JobPilot AI dashboard: dark glass cards, neon-green accents, daily apply goal](docs/screenshots/dashboard.png)
+![JobPilot AI dashboard in black, white and lemon green, with a daily apply goal](docs/screenshots/dashboard.png)
 
 <p align="center">
   <img src="docs/screenshots/mobile-dashboard.png" alt="Dashboard on a phone" width="30%">

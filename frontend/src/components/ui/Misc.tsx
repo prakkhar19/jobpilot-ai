@@ -78,7 +78,7 @@ export function StatCard({
       <div className="flex items-center justify-between gap-2">
         <p className="text-xs font-medium text-subtle">{label}</p>
         {icon && (
-          <span className="flex h-8 w-8 items-center justify-center rounded-full bg-primary-soft text-primary ring-1 ring-primary/20 transition-transform duration-300 group-hover:scale-110 group-hover:rotate-6">
+          <span className="flex h-8 w-8 items-center justify-center rounded-full bg-surface-2 text-fg ring-1 ring-border-strong transition-transform duration-300 group-hover:scale-110 group-hover:rotate-6">
             {icon}
           </span>
         )}

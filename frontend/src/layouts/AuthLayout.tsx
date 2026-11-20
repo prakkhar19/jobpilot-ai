@@ -7,8 +7,8 @@ import { LoadingState } from '@/components/ui'
 export function AuthLayout() {
   return (
     <div className="relative flex min-h-screen flex-col overflow-hidden">
-      <div aria-hidden="true" className="pointer-events-none absolute -top-32 -left-24 h-96 w-96 animate-float rounded-full bg-brand opacity-20 blur-3xl" />
-      <div aria-hidden="true" className="pointer-events-none absolute -right-24 bottom-0 h-80 w-80 rounded-full bg-accent-2 opacity-15 blur-3xl" />
+      <div aria-hidden="true" className="pointer-events-none absolute -top-32 -left-24 h-96 w-96 animate-float rounded-full bg-lemon opacity-10 blur-3xl" />
+      <div aria-hidden="true" className="pointer-events-none absolute -right-24 bottom-0 h-80 w-80 rounded-full bg-fg opacity-5 blur-3xl" />
       <header className="flex h-14 items-center justify-between px-4 sm:px-6">
         <Logo />
         <ThemeToggle />

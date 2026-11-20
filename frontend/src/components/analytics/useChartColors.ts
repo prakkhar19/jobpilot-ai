@@ -1,8 +1,8 @@
 import { useTheme } from '@/context/theme'
 
 // Categorical slots 1–3, stepped separately for each surface (validated reference palette).
-const LIGHT = { series: ['#15a34a', '#0d9488', '#d97706'], grid: '#dfe6e4', axis: '#61716d', surface: '#ffffff' }
-const DARK = { series: ['#3ee05f', '#2dd4bf', '#f5c542'], grid: '#1f2b2c', axis: '#84918f', surface: '#111a1b' }
+const LIGHT = { series: ['#7a9e00', '#0a0a0a', '#9a9a95'], grid: '#e3e3e0', axis: '#6b6b67', surface: '#ffffff' }
+const DARK = { series: ['#d4f53c', '#ffffff', '#7a7a7a'], grid: '#242424', axis: '#8e8e8e', surface: '#111111' }
 
 export function useChartColors() {
   const { theme } = useTheme()

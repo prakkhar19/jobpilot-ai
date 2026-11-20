@@ -25,7 +25,7 @@ function Step({ n, done, children }: { n: number; done: boolean; children: React
       <span
         className={cn(
           'flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-semibold transition-colors',
-          done ? 'bg-success text-white dark:text-bg' : 'bg-surface-2 text-subtle',
+          done ? 'bg-lemon text-lemon-fg' : 'bg-surface-2 text-subtle',
         )}
         aria-hidden="true"
       >
@@ -171,7 +171,7 @@ export default function ApplyModePage() {
               <span className="text-xs text-subtle">{total} waiting</span>
             </div>
             <div className="mt-2 h-2 overflow-hidden rounded-full bg-surface-2" role="progressbar" aria-label="Applied today" aria-valuemin={0} aria-valuemax={goal} aria-valuenow={today}>
-              <div className="h-full rounded-full bg-brand transition-[width] duration-700" style={{ width: `${Math.min(100, (today / goal) * 100)}%` }} />
+              <div className="h-full rounded-full bg-lemon transition-[width] duration-700" style={{ width: `${Math.min(100, (today / goal) * 100)}%` }} />
             </div>
           </div>
           {sessionApplied > 0 && <Badge tone="success">+{sessionApplied} this session</Badge>}
@@ -181,7 +181,7 @@ export default function ApplyModePage() {
       {!item ? (
         <Card className="animate-fade-up">
           <CardBody className="flex flex-col items-center gap-3 py-12 text-center">
-            <span className="flex h-12 w-12 animate-float items-center justify-center rounded-full bg-brand text-white">
+            <span className="flex h-12 w-12 animate-float items-center justify-center rounded-full bg-lemon text-lemon-fg">
               <PartyPopper className="h-6 w-6" aria-hidden="true" />
             </span>
             <h2 className="text-lg font-semibold text-fg">All caught up!</h2>
@@ -196,7 +196,7 @@ export default function ApplyModePage() {
       ) : (
         <Card key={item.job_id} className="animate-fade-up overflow-hidden">
           <div className="relative border-b border-border p-5 sm:p-6">
-            <div aria-hidden="true" className="pointer-events-none absolute -top-20 -right-16 h-48 w-48 rounded-full bg-brand opacity-15 blur-3xl" />
+            <div aria-hidden="true" className="pointer-events-none absolute -top-20 -right-16 h-48 w-48 rounded-full bg-lemon opacity-[0.06] blur-3xl" />
             <div className="relative flex items-start gap-4">
               <ScoreRing score={item.match_score} size={64} />
               <div className="min-w-0 flex-1">
@@ -270,7 +270,7 @@ export default function ApplyModePage() {
                   </Button>
                 </Step>
                 <FormQuestions key={item.job_id} jobId={item.job_id} company={item.company} />
-                <div className="rounded-lg border border-accent/30 bg-accent/5 p-3 text-sm">
+                <div className="rounded-lg border border-border-strong bg-surface-2/60 p-3 text-sm">
                   <p className="font-medium">Boost your chances: ask for a referral</p>
                   <p className="mt-0.5 text-xs text-subtle">
                     Referred candidates are far more likely to get interviews. Find someone at {item.company}, send a
@@ -299,7 +299,7 @@ export default function ApplyModePage() {
 
             <div className="flex flex-wrap items-center gap-2 border-t border-border pt-4">
               <Button
-                className="flex-1 bg-brand text-white sm:flex-none"
+                className="flex-1 bg-lemon text-lemon-fg sm:flex-none"
                 onClick={() => applied.mutate(item.job_id)}
                 loading={applied.isPending}
                 disabled={needsDocs}

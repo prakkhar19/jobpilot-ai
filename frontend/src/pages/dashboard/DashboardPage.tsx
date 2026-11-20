@@ -40,7 +40,7 @@ export default function DashboardPage() {
     <div className="space-y-6">
       <div className="grid gap-4 lg:grid-cols-5">
         <section className="card-surface animate-fade-up relative overflow-hidden rounded-3xl border border-border bg-surface p-6 sm:p-8 lg:col-span-3">
-          <div aria-hidden="true" className="pointer-events-none absolute -top-24 -right-16 h-64 w-64 animate-float rounded-full bg-primary opacity-10 blur-3xl" />
+          <div aria-hidden="true" className="pointer-events-none absolute -top-24 -right-16 h-64 w-64 animate-float rounded-full bg-fg opacity-[0.04] blur-3xl" />
           <div className="relative flex h-full flex-col justify-between gap-6">
             <div className="min-w-0">
               <NextRunBadge className="mb-4" />
