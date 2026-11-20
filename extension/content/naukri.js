@@ -19,8 +19,10 @@
     await log(`Naukri says: "${message.slice(0, 200)}" (status ${status || "?"})`);
     const job = hop.job;
     if (/redirected to the company|company'?s? (web)?site/i.test(message)) {
-      let opened = "";
-      try { opened = sessionStorage.getItem("jpOpened") || ""; sessionStorage.removeItem("jpOpened"); } catch (_) { /* ignore */ }
+      // This page itself opens the employer's site as it loads; open-hook.js records the URL.
+      const opened = await waitFor(() => { try { return sessionStorage.getItem("jpOpened"); } catch (_) { return null; } }, 8000) || "";
+      try { sessionStorage.removeItem("jpOpened"); sessionStorage.removeItem("jpHook"); } catch (_) { /* ignore */ }
+      await log(opened ? `Employer link: ${opened.split("?")[0].slice(0, 140)}` : "No employer link was opened by Naukri's page.");
       const ext = await bg("finishExternal", { url: opened });
       if (ext.url) return; // the worker tab now goes to the employer's page; ats.js applies there
       await log("Naukri opened the company site but the tab wasn't caught.");
@@ -124,6 +126,12 @@
       return bg("outcome", { outcome: "skipped" });
     }
     if (!apply && companySite) {
+      const direct = await employerUrl();
+      if (direct) {
+        await log(`Applying (${ev.score}) on the company site: ${d.title} @ ${d.company} → ${new URL(direct).hostname}`);
+        await bg("insertSteps", { steps: [{ kind: "ats", url: direct, jobId: ev.job_id, label: `${d.company}: ${d.title} (${ev.score})` }] });
+        return;
+      }
       await window.JP.viaCompanySite(companySite, ev, d, "naukri", location.href.split("?")[0]);
       return;
     }
@@ -135,6 +143,25 @@
     const res = await afterApply(ev.job_id);
     await bg("setPending", { pending: null });
     await report(pending, res);
+  }
+
+  // Naukri's job data has the employer's application link for "Apply on company site" jobs.
+  async function employerUrl() {
+    const id = (location.pathname.match(/-(\d{9,})(?:$|[/?#])/) || location.href.match(/-(\d{9,})/) || [])[1];
+    if (!id) return "";
+    try {
+      const r = await fetch(`/jobapi/v4/job/${id}?microsite=y`, { credentials: "include",
+        headers: { appid: "121", systemid: "Naukri", clientid: "d3skt0p", accept: "application/json" } });
+      if (!r.ok) { await log(`Naukri job data: HTTP ${r.status}`); return ""; }
+      const j = await r.json();
+      const jd = j.jobDetails || j;
+      const url = jd.applyRedirectUrl || jd.companyApplyUrl || jd.applyUrl || jd.redirectUrl || "";
+      if (!url) await log(`Naukri job data has no employer link (keys: ${Object.keys(jd).filter((k) => /apply|redirect|url/i.test(k)).join(", ") || "none"}).`);
+      return /^https?:/.test(url) && !/naukri\.com/.test(new URL(url).hostname) ? url : "";
+    } catch (e) {
+      await log(`Naukri job data failed: ${e.message}`);
+      return "";
+    }
   }
 
   async function report(p, res) {

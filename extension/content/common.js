@@ -219,7 +219,7 @@
     const job = { jobId: ev.job_id, title: d.title, company: d.company };
     await log(`Applying (${ev.score}) on the company site: ${d.title} @ ${d.company}`);
     await bg("expectExternal", { job });
-    try { sessionStorage.removeItem("jpOpened"); } catch (_) { /* ignore */ }
+    try { sessionStorage.removeItem("jpOpened"); sessionStorage.setItem("jpHook", "1"); } catch (_) { /* ignore */ }
     await bg("hookOpen").catch(() => {});
     const onMsg = (e) => { if (e.source === window && e.data && e.data.jpOpened) bg("externalUrl", { url: e.data.jpOpened }).catch(() => {}); };
     window.addEventListener("message", onMsg);
