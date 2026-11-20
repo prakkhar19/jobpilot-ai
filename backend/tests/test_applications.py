@@ -29,7 +29,7 @@ def test_prepare_stops_for_missing_answers_then_approval(client, live_server):
     assert app["status"] == "needs_input"
     missing = {f["name"] for f in app["missing_fields"]}
     assert missing == {"q_work_auth", "q_notice"}  # never guessed
-    assert app["answers"]["email"]["value"] == "jordan.rivera@example.com"
+    assert app["answers"]["email"]["value"] == "alex@example.com"  # account email, not the resume's
     assert app["answers"]["first_name"]["value"] == "Jordan"
     assert app["resume_version_id"] and app["cover_letter_id"]
     # cannot approve with missing answers

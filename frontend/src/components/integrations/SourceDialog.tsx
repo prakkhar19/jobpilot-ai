@@ -4,7 +4,7 @@ import { toast } from 'sonner'
 import { Alert, Button, Dialog, Field, Input, Select, Switch } from '@/components/ui'
 import { errorMessage } from '@/services/api'
 import { sourceService } from '@/services/integrations'
-import type { JobSource, SourceKind } from '@/types/api'
+import type { CredentialField, JobSource, SourceKind } from '@/types/api'
 
 /** Add a job source (POST /api/sources); options come from GET /api/sources/catalog. */
 export function SourceDialog({
@@ -26,6 +26,7 @@ export function SourceDialog({
   const [error, setError] = useState<string | null>(null)
   const [fieldError, setFieldError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
+  const [moreOpen, setMoreOpen] = useState(false)
 
   const effectiveKind = (kind || supported[0]?.kind || '') as SourceKind | ''
   const entry = supported.find((s) => s.kind === effectiveKind)
@@ -38,6 +39,7 @@ export function SourceDialog({
     setCredentials({})
     setError(null)
     setFieldError(null)
+    setMoreOpen(false)
   }
 
   const submit = async (e: FormEvent) => {
@@ -48,7 +50,7 @@ export function SourceDialog({
       return
     }
     if (!effectiveKind) return
-    const missing = (entry?.credential_fields ?? []).filter((f) => !credentials[f.key]?.trim())
+    const missing = (entry?.credential_fields ?? []).filter((f) => !f.optional && !credentials[f.key]?.trim())
     if (missing.length) {
       setError(`Please fill in: ${missing.map((f) => f.label).join(', ')}`)
       return
@@ -74,6 +76,41 @@ export function SourceDialog({
     }
   }
 
+  const credentialField = (f: CredentialField) => (
+    <Field
+      key={f.key}
+      label={f.label}
+      required={!f.optional}
+      hint={f.secret ? 'Stored encrypted; never shown again.' : f.optional ? 'Optional.' : undefined}
+    >
+      <Input
+        type={f.secret ? 'password' : 'text'}
+        autoComplete="off"
+        placeholder={f.placeholder ?? ''}
+        value={credentials[f.key] ?? ''}
+        onChange={(e) => setCredentials((c) => ({ ...c, [f.key]: e.target.value }))}
+      />
+    </Field>
+  )
+  const fields = entry?.credential_fields ?? []
+  // Sources with a default identifier (e.g. job-alert email) show only what's required; the rest is under "More options".
+  const simple = Boolean(entry?.identifier_default) && !fieldError
+  const identifierField = (
+    <Field
+      label="Identifier"
+      required={!entry?.identifier_default}
+      error={fieldError}
+      hint={entry?.identifier_default ? `${entry.identifier_help} (default: ${entry.identifier_default})` : entry?.identifier_help}
+    >
+      <Input value={identifier} placeholder={entry?.identifier_default ?? ''} onChange={(e) => setIdentifier(e.target.value)} />
+    </Field>
+  )
+  const helpLink = entry?.help_url ? (
+    <a href={entry.help_url} target="_blank" rel="noreferrer" className="inline-block text-sm font-medium underline">
+      Get an app password →
+    </a>
+  ) : null
+
   return (
     <Dialog
       open={open}
@@ -98,28 +135,32 @@ export function SourceDialog({
               ))}
             </Select>
           </Field>
-          <Field
-            label="Identifier"
-            required={!entry?.identifier_default}
-            error={fieldError}
-            hint={entry?.identifier_default ? `${entry.identifier_help} (default: ${entry.identifier_default})` : entry?.identifier_help}
-          >
-            <Input
-              value={identifier}
-              placeholder={entry?.identifier_default ?? ''}
-              onChange={(e) => setIdentifier(e.target.value)}
-            />
-          </Field>
-          {(entry?.credential_fields ?? []).map((f) => (
-            <Field key={f.key} label={f.label} required hint={f.secret ? 'Stored encrypted; never shown again.' : undefined}>
-              <Input
-                type={f.secret ? 'password' : 'text'}
-                autoComplete="off"
-                value={credentials[f.key] ?? ''}
-                onChange={(e) => setCredentials((c) => ({ ...c, [f.key]: e.target.value }))}
-              />
-            </Field>
-          ))}
+          {simple ? (
+            <>
+              {fields.filter((f) => !f.optional).map(credentialField)}
+              {helpLink}
+              <button
+                type="button"
+                className="block text-sm text-subtle underline"
+                aria-expanded={moreOpen}
+                onClick={() => setMoreOpen((o) => !o)}
+              >
+                {moreOpen ? 'Hide options' : 'More options'}
+              </button>
+              {moreOpen && (
+                <>
+                  {identifierField}
+                  {fields.filter((f) => f.optional).map(credentialField)}
+                </>
+              )}
+            </>
+          ) : (
+            <>
+              {identifierField}
+              {fields.map(credentialField)}
+              {helpLink}
+            </>
+          )}
           <Field label="Display name" hint="Optional; detected automatically when possible.">
             <Input value={displayName} onChange={(e) => setDisplayName(e.target.value)} />
           </Field>

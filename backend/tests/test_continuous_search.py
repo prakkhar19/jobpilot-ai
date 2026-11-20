@@ -146,6 +146,38 @@ def test_email_alerts_adapter_reads_only(monkeypatch):
     assert not bad.ok and "App Password" in bad.message
 
 
+def test_imap_host_detected_from_email():
+    from app.adapters.job_sources.email_alerts import imap_host_for
+
+    assert imap_host_for("Me@Gmail.com") == "imap.gmail.com"
+    assert imap_host_for("me@outlook.com") == "outlook.office365.com"
+    assert imap_host_for("me@company.example") == ""
+
+
+def test_email_alerts_only_needs_app_password(client, monkeypatch):
+    """Account email is the mailbox; IMAP server is detected; Google's spaced app password is accepted."""
+    import app.adapters.job_sources.email_alerts as ea
+
+    seen: dict = {}
+
+    class RecordingIMAP(FakeIMAP):
+        def __init__(self, host, port, timeout=None):  # noqa: ANN001
+            seen["host"] = host
+            super().__init__(host, port, timeout)
+
+        def login(self, u, p):  # noqa: ANN001
+            seen["user"] = u
+            return super().login(u, p)
+
+    monkeypatch.setattr(ea.imaplib, "IMAP4_SSL", RecordingIMAP)
+    monkeypatch.setattr(ea, "validate_url", lambda url, **k: url)
+    monkeypatch.setattr(ea, "imap_host_for", lambda a: "imap.gmail.com")
+    r = client.post("/api/sources", json={"kind": "email_alerts", "credentials": {"password": "app- pass"}})
+    assert r.status_code == 201, r.text
+    assert seen == {"host": "imap.gmail.com", "user": "alex@example.com"}
+    assert "alex@example.com" in r.json()["display_name"]
+
+
 def test_email_alerts_rejects_private_imap_host():
     check = EmailAlertsAdapter(credentials={"imap_host": "127.0.0.1", "username": "a", "password": "b"}
                                ).validate_source_access("INBOX")

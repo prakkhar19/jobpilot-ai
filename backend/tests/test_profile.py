@@ -19,7 +19,7 @@ def test_upload_parses_profile(client, maker, name):
     assert r.status_code == 201, r.text
     p = r.json()["profile"]
     assert p["full_name"] == "Jordan Rivera"
-    assert p["email"] == "jordan.rivera@example.com"
+    assert p["email"] == "alex@example.com"  # the account email is used everywhere, not the resume's
     assert p["status"] == "draft"
     assert [e["company"] for e in p["experiences"]] == ["Northwind Analytics", "Contoso Labs"]
     assert p["experiences"][0]["is_current"] is True

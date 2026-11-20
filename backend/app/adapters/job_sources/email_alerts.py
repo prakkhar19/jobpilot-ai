@@ -42,6 +42,23 @@ _JUNK_TEXT = re.compile(r"(?i)^(view|apply|see|save|unsubscribe|manage|more|jobs
                         r"\d+ (new )?jobs?|view (all|job|jobs)|see all jobs)\b")
 
 
+IMAP_HOSTS = {
+    "gmail.com": "imap.gmail.com", "googlemail.com": "imap.gmail.com",
+    "outlook.com": "outlook.office365.com", "hotmail.com": "outlook.office365.com", "live.com": "outlook.office365.com",
+    "msn.com": "outlook.office365.com",
+    "yahoo.com": "imap.mail.yahoo.com", "yahoo.co.in": "imap.mail.yahoo.com", "ymail.com": "imap.mail.yahoo.com",
+    "icloud.com": "imap.mail.me.com", "me.com": "imap.mail.me.com", "mac.com": "imap.mail.me.com",
+    "zoho.com": "imap.zoho.com", "zohomail.in": "imap.zoho.in", "rediffmail.com": "imap.rediffmail.com",
+    "aol.com": "imap.aol.com", "proton.me": "", "protonmail.com": "",
+}
+
+
+def imap_host_for(address: str) -> str:
+    """IMAP server for well-known providers; '' when unknown (the user enters it)."""
+    domain = address.rsplit("@", 1)[-1].strip().lower() if "@" in address else ""
+    return IMAP_HOSTS.get(domain, "")
+
+
 def platform_for_sender(sender: str) -> str | None:
     addr = parseaddr(sender)[1].lower()
     domain = addr.split("@")[-1]
@@ -131,26 +148,31 @@ def _decode(value: str | None) -> str:
 class EmailAlertsAdapter(JobSourceAdapter):
     kind = "email_alerts"
     label = "Job-alert emails (LinkedIn, Naukri, Wellfound, Instahyre, Indeed, Foundit, Glassdoor)"
-    description = ("Reads job-alert emails from your mailbox (read-only, IMAP) and imports the jobs. Turn on job alerts "
-                   "on each platform, then connect your email. Gmail: use imap.gmail.com and an App Password "
-                   "(Google Account → Security → App passwords).")
+    description = ("Reads job-alert emails from your mailbox (read-only) and imports the jobs. Turn on job alerts on "
+                   "LinkedIn/Naukri/etc. with the same email, then paste an app password. Gmail: 2-Step Verification "
+                   "must be on; create the app password at myaccount.google.com/apppasswords.")
+    help_url = "https://myaccount.google.com/apppasswords"
     identifier_help = "Mailbox/folder to read, usually INBOX"
     identifier_default = "INBOX"
     credential_fields = [
-        {"key": "imap_host", "label": "IMAP server (e.g. imap.gmail.com)", "secret": False},
-        {"key": "username", "label": "Email address", "secret": False},
-        {"key": "password", "label": "App password", "secret": True},
+        {"key": "password", "label": "App password (16 letters from Google)", "secret": True},
+        {"key": "username", "label": "Email address", "secret": False, "optional": True,
+         "placeholder": "Your account email"},
+        {"key": "imap_host", "label": "IMAP server", "secret": False, "optional": True,
+         "placeholder": "Detected from the email address"},
     ]
     complete_listing = False
     min_interval_minutes = 15
     lookback_days = 3
 
     def _connect(self) -> imaplib.IMAP4_SSL:
-        host = (self.credentials.get("imap_host") or "").strip().lower()
-        user = self.credentials.get("username") or ""
-        pwd = self.credentials.get("password") or ""
-        if not host or not user or not pwd:
-            raise SourceError("Enter the IMAP server, email address and app password.")
+        user = (self.credentials.get("username") or "").strip()
+        host = (self.credentials.get("imap_host") or "").strip().lower() or imap_host_for(user)
+        pwd = (self.credentials.get("password") or "").replace(" ", "")  # Google shows it as "abcd efgh ijkl mnop"
+        if not user or not pwd:
+            raise SourceError("Enter the app password.")
+        if not host:
+            raise SourceError("Could not detect the IMAP server for this email; enter it under More options.")
         if not re.fullmatch(r"[a-z0-9.-]+", host):
             raise SourceError("Invalid IMAP server name.")
         try:

@@ -107,7 +107,7 @@ def config(db: DB, user: ExtUser) -> dict:
         "min_match_score": cfg.min_match_score,
         "applied_today": _applied_today(db, user, cfg.timezone),
         "profile": {
-            "full_name": p.get("full_name", ""), "email": p.get("email", ""), "phone": p.get("phone", ""),
+            "full_name": p.get("full_name", ""), "email": p.get("email") or user.email, "phone": p.get("phone", ""),
             "location": p.get("location", ""), "linkedin_url": p.get("linkedin_url", ""),
             "github_url": p.get("github_url", ""), "portfolio_url": p.get("portfolio_url", ""),
             "headline": p.get("headline", ""), "skills": skills[:30],

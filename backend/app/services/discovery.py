@@ -381,7 +381,8 @@ def source_catalog() -> dict:
         "supported": [
             {"kind": k, "label": a.label, "description": a.description, "identifier_help": a.identifier_help,
              "identifier_default": a.identifier_default, "credential_fields": a.credential_fields,
-             "min_interval_minutes": a.min_interval_minutes, "attribution": a.attribution}
+             "min_interval_minutes": a.min_interval_minutes, "attribution": a.attribution,
+             "help_url": a.help_url}
             for k, a in ADAPTERS.items()
         ],
         "unsupported": [{"platform": k, "reason": v} for k, v in UNSUPPORTED_PLATFORMS.items()],

@@ -300,6 +300,9 @@ def create_from_upload(
                 w.startswith(f"Could not find your {lbl}") and profile_data.get(k)
                 for k, lbl in (("full_name", "name"), ("email", "email"), ("phone", "phone number"))
             )]
+    # The account email is the one used everywhere: resumes, application forms, job alerts.
+    profile_data["email"] = user.email
+    warnings = [w for w in warnings if not w.startswith("Could not find your email")]
 
     has_profiles = db.scalar(select(CandidateProfile.id).where(CandidateProfile.user_id == user.id)) is not None
     profile = CandidateProfile(

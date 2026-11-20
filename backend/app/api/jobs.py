@@ -67,7 +67,10 @@ def create_source(body: SourceIn, db: DB, user: CurrentUser) -> SourceOut:
     if body.kind == "demo" and not get_settings().demo_mode:
         raise DomainError("The demo board is disabled on this installation.")
     creds = _clean_credentials(body.kind, body.credentials)
-    missing = [f["label"] for f in ADAPTERS[body.kind].credential_fields if f["key"] not in creds]
+    if body.kind == "email_alerts":
+        creds.setdefault("username", user.email)  # the account email is the job-alert mailbox by default
+    missing = [f["label"] for f in ADAPTERS[body.kind].credential_fields
+               if f["key"] not in creds and not f.get("optional")]
     if missing:
         raise DomainError(f"Missing: {', '.join(missing)}.")
     ident = body.identifier.strip() or ADAPTERS[body.kind].identifier_default

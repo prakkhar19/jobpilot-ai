@@ -85,6 +85,7 @@ class JobSourceAdapter(ABC):
     credential_fields: list[dict] = []
     identifier_default: str = ""
     attribution: str = ""
+    help_url: str = ""  # where the user gets the credential (shown as a link in the dialog)
 
     def __init__(self, client: SafeHttpClient | None = None, credentials: dict[str, str] | None = None) -> None:
         self._client = client

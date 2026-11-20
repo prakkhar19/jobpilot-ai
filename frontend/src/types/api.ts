@@ -243,6 +243,8 @@ export interface CredentialField {
   key: string
   label: string
   secret: boolean
+  optional?: boolean
+  placeholder?: string
 }
 
 export interface SourceInput {
@@ -275,6 +277,7 @@ export interface SourceCatalog {
     identifier_help: string
     identifier_default?: string
     credential_fields?: CredentialField[]
+    help_url?: string
     min_interval_minutes?: number
     attribution?: string
   }[]
