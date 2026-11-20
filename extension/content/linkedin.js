@@ -261,7 +261,16 @@
 
   async function easyApply(jobId, resume) {
     const m0 = await waitFor(modal, 10000);
-    if (!m0) return { outcome: "failed", note: "Easy Apply window did not open." };
+    if (!m0) {
+      const frames = [...document.querySelectorAll("iframe")].map((f) => {
+        let same = false, body = "";
+        try { same = !!f.contentDocument; body = text(f.contentDocument?.body || null).slice(0, 120); } catch (_) { /* cross-origin */ }
+        return `${(f.getAttribute("src") || "").slice(0, 90)} [${f.getAttribute("data-testid") || ""}] vis=${visible(f)} same=${same} "${body}"`;
+      });
+      const dialogs = deepAll(document, "[role='dialog'], dialog, [aria-modal='true']").map((d) => `${d.tagName} vis=${visible(d)} "${text(d).slice(0, 100)}"`);
+      await log(`EASY-APPLY-DIAG url=${location.pathname}${location.search.slice(0, 80)} | FRAMES ${frames.join(" || ")} | DIALOGS ${dialogs.join(" || ")}`.slice(0, 1800));
+      return { outcome: "failed", note: "Easy Apply window did not open." };
+    }
     let lastStepKey = "";
     let sameCount = 0;
     for (let step = 0; step < 15; step++) {
