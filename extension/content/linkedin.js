@@ -415,6 +415,8 @@
         if (stuck >= 2) {
           const fs = collectFields(modal());
           await log(`EASY-STUCK btn="${text(btn)}" fields=${fs.length} [${fs.map((f) => `${f.label}=${String(f.el?.value || "").slice(0, 20)}`).join("; ").slice(0, 500)}] panel="${text(modal()).slice(0, 700)}"`);
+          const r0 = modal().querySelector("input[type='radio']");
+          if (r0) await log(`EASY-RADIO name=${r0.name} id=${r0.id} html=${(r0.closest("fieldset") || r0.parentElement?.parentElement?.parentElement)?.outerHTML.replace(/\s+/g, " ").slice(0, 900)}`);
           const empty = collectFields(modal()).filter((f) => f.type !== "file" && !String(f.el?.value || "").trim()).map((f) => f.label).filter(Boolean);
           await discard();
           return { outcome: "needs_you", missing: [...new Set(empty)].slice(0, 8).concat(empty.length ? [] : ["A step of the Easy Apply form"]),

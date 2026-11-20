@@ -103,7 +103,9 @@
     if (rg?.getAttribute("aria-label")) return clean(rg.getAttribute("aria-label"));
     let box = el.parentElement;
     while (box && box !== root && !group.every((r) => box.contains(r))) box = box.parentElement;
-    for (let i = 0; box && i < 4; i++, box = box.parentElement) {
+    for (let i = 0; box && i < 9; i++, box = box.parentElement) {
+      // Stop before the block grows to include another question's options (its first line would be that question).
+      if ([...box.querySelectorAll("input[type='radio']")].some((r) => r.name !== name && r.name)) break;
       const lines = (box.innerText || "").split("\n").map(clean).filter(Boolean);
       const onlyOptions = (l) => {
         let rest = l.toLowerCase();
