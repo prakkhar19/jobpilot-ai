@@ -7,7 +7,7 @@ export const Tabs = RT.Root
 export function TabsList({ className, ...rest }: ComponentProps<typeof RT.List>) {
   return (
     <RT.List
-      className={cn('inline-flex max-w-full flex-wrap items-center gap-1 rounded-lg bg-surface-2 p-1', className)}
+      className={cn('inline-flex max-w-full flex-wrap items-center gap-1 rounded-full border border-border bg-surface-2/70 p-1', className)}
       {...rest}
     />
   )
@@ -17,8 +17,8 @@ export function TabsTrigger({ className, ...rest }: ComponentProps<typeof RT.Tri
   return (
     <RT.Trigger
       className={cn(
-        'rounded-md px-3 py-1.5 text-sm font-medium text-muted transition-colors hover:text-fg',
-        'data-[state=active]:bg-surface data-[state=active]:text-fg data-[state=active]:shadow-sm',
+        'rounded-full px-4 py-1.5 text-sm font-medium text-muted transition-all hover:text-fg',
+        'data-[state=active]:bg-border-strong/70 data-[state=active]:text-fg data-[state=active]:shadow-sm',
         className,
       )}
       {...rest}

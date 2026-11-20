@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { toast } from 'sonner'
 import { Badge, Button, Card, CardBody, ErrorState, LoadingState, PageHeader, ScoreRing, buttonClasses } from '@/components/ui'
+import { FormQuestions } from '@/components/apply/FormQuestions'
 import { useAuth } from '@/context/auth'
 import { applyQueueService } from '@/services/applyQueue'
 import { errorMessage } from '@/services/api'
@@ -249,25 +250,26 @@ export default function ApplyModePage() {
                     target="_blank"
                     rel="noopener noreferrer"
                     onClick={() => setSteps((s) => ({ ...s, opened: true }))}
-                    className={buttonClasses('outline', 'md', 'w-full justify-start')}
+                    className={buttonClasses('outline', 'md', 'h-auto! min-h-9 w-full justify-start py-2! text-left whitespace-normal!')}
                   >
-                    <ExternalLink className="h-4 w-4" aria-hidden="true" /> Open the job &amp; click Apply <span className="font-normal text-subtle">(1-click uses your profile resume)</span>
+                    <ExternalLink className="h-4 w-4 shrink-0" aria-hidden="true" /> Open the job &amp; click Apply <span className="font-normal text-subtle">(1-click uses your profile resume)</span>
                   </a>
                 </Step>
                 <Step n={2} done={steps.resume}>
                   <a
                     href={resumeService.downloadUrl(item.resume_version_id!, 'pdf')}
                     onClick={() => setSteps((s) => ({ ...s, resume: true }))}
-                    className={buttonClasses('outline', 'md', 'w-full justify-start')}
+                    className={buttonClasses('outline', 'md', 'h-auto! min-h-9 w-full justify-start py-2! text-left whitespace-normal!')}
                   >
-                    <FileDown className="h-4 w-4" aria-hidden="true" /> Download my tailored resume <span className="font-normal text-subtle">(only if they ask for an upload)</span>
+                    <FileDown className="h-4 w-4 shrink-0" aria-hidden="true" /> Download my tailored resume <span className="font-normal text-subtle">(only if they ask for an upload)</span>
                   </a>
                 </Step>
                 <Step n={3} done={steps.letter}>
-                  <Button variant="outline" className="w-full justify-start" onClick={() => void copyLetter()}>
+                  <Button variant="outline" className="h-auto! min-h-9 w-full justify-start py-2! text-left whitespace-normal!" onClick={() => void copyLetter()}>
                     <Copy className="h-4 w-4" aria-hidden="true" /> Copy cover letter (if they ask)
                   </Button>
                 </Step>
+                <FormQuestions key={item.job_id} jobId={item.job_id} company={item.company} />
                 <div className="rounded-lg border border-accent/30 bg-accent/5 p-3 text-sm">
                   <p className="font-medium">Boost your chances: ask for a referral</p>
                   <p className="mt-0.5 text-xs text-subtle">

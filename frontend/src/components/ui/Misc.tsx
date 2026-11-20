@@ -17,7 +17,7 @@ export function PageHeader({
   return (
     <div className={cn('mb-6 flex flex-wrap items-end justify-between gap-4', className)}>
       <div className="min-w-0">
-        <h1 className="text-xl font-semibold tracking-tight text-fg sm:text-2xl">{title}</h1>
+        <h1 className="text-2xl font-normal tracking-tight text-fg sm:text-3xl">{title}</h1>
         {description && <p className="mt-1 max-w-3xl text-sm text-subtle">{description}</p>}
       </div>
       {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
@@ -74,16 +74,16 @@ export function StatCard({
   className?: string
 }) {
   return (
-    <div className={cn('group relative overflow-hidden rounded-xl border border-border bg-surface p-4 shadow-xs', className)}>
+    <div className={cn('card-surface group relative overflow-hidden rounded-2xl border border-border bg-surface p-4', className)}>
       <div className="flex items-center justify-between gap-2">
         <p className="text-xs font-medium text-subtle">{label}</p>
         {icon && (
-          <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary-soft text-primary transition-transform duration-300 group-hover:scale-110 group-hover:rotate-6">
+          <span className="flex h-8 w-8 items-center justify-center rounded-full bg-primary-soft text-primary ring-1 ring-primary/20 transition-transform duration-300 group-hover:scale-110 group-hover:rotate-6">
             {icon}
           </span>
         )}
       </div>
-      <p className="mt-2 text-2xl font-semibold tracking-tight text-fg tabular-nums">{value}</p>
+      <p className="metric mt-2 text-3xl text-fg">{value}</p>
       {hint && <p className="mt-1 text-xs text-subtle">{hint}</p>}
     </div>
   )

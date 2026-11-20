@@ -31,7 +31,9 @@ export function DiscoveryRunner({
   label = 'Run discovery',
   onFinished,
   size = 'md',
+  variant = 'primary',
 }: {
+  variant?: 'primary' | 'outline'
   label?: string
   onFinished?: (task: AgentTask) => void
   size?: 'sm' | 'md'
@@ -90,7 +92,7 @@ export function DiscoveryRunner({
 
   return (
     <div className="flex flex-wrap items-center gap-2">
-      <Button onClick={start} loading={starting} disabled={active} size={size}>
+      <Button onClick={start} loading={starting} disabled={active} size={size} variant={variant}>
         {!starting && <Play className="h-4 w-4" aria-hidden="true" />}
         {active ? 'Discovery running…' : label}
       </Button>

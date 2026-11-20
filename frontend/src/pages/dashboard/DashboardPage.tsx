@@ -5,6 +5,7 @@ import { AgentHealthCard } from '@/components/dashboard/AgentHealthCard'
 import { NextRunBadge } from '@/components/dashboard/NextRunBadge'
 import { PipelineCard } from '@/components/dashboard/PipelineCard'
 import { RecentActivityCard } from '@/components/dashboard/RecentActivityCard'
+import { TodayCard } from '@/components/dashboard/TodayCard'
 import { TopMatchesCard } from '@/components/dashboard/TopMatchesCard'
 import { DiscoveryRunner } from '@/components/shared/DiscoveryRunner'
 import { Card, CardBody, CardHeader, CountUp, ErrorState, Skeleton, StatCard, buttonClasses } from '@/components/ui'
@@ -37,40 +38,44 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-6">
-      <section className="animate-fade-up relative overflow-hidden rounded-2xl border border-border bg-surface p-6 shadow-xs sm:p-8">
-        <div aria-hidden="true" className="pointer-events-none absolute -top-24 -right-16 h-64 w-64 animate-float rounded-full bg-brand opacity-20 blur-3xl" />
-        <div aria-hidden="true" className="pointer-events-none absolute -bottom-28 left-1/3 h-56 w-56 rounded-full bg-accent-2 opacity-10 blur-3xl" />
-        <div className="relative flex flex-wrap items-end justify-between gap-4">
-          <div className="min-w-0">
-            <NextRunBadge className="mb-3" />
-            <h1 className="text-2xl font-semibold tracking-tight text-fg sm:text-3xl">
-              {greeting()}
-              {first ? (
-                <>
-                  , <span className="text-gradient">{first}</span>
-                </>
-              ) : null}
-            </h1>
-            <p className="mt-1 text-sm text-subtle">
-              {t && t.qualified > 0
-                ? `${formatNumber(t.qualified)} strong matches are waiting for you. Your job search at a glance.`
-                : 'Your job search at a glance.'}
-            </p>
+      <div className="grid gap-4 lg:grid-cols-5">
+        <section className="card-surface animate-fade-up relative overflow-hidden rounded-3xl border border-border bg-surface p-6 sm:p-8 lg:col-span-3">
+          <div aria-hidden="true" className="pointer-events-none absolute -top-24 -right-16 h-64 w-64 animate-float rounded-full bg-primary opacity-10 blur-3xl" />
+          <div className="relative flex h-full flex-col justify-between gap-6">
+            <div className="min-w-0">
+              <NextRunBadge className="mb-4" />
+              <h1 className="text-3xl font-light tracking-tight text-fg sm:text-4xl">
+                {greeting()}
+                {first ? (
+                  <>
+                    , <span className="font-normal text-gradient">{first}</span>
+                  </>
+                ) : null}
+              </h1>
+              <p className="mt-2 text-sm text-subtle">
+                {t && t.qualified > 0
+                  ? `${formatNumber(t.qualified)} strong matches are waiting for you. Your job search at a glance.`
+                  : 'Your job search at a glance.'}
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <Link to="/apply" className={buttonClasses('primary', 'md', 'h-10 px-5 shadow-lg shadow-primary/30')}>
+                <Zap className="h-4 w-4" aria-hidden="true" /> Start Apply Mode
+              </Link>
+              <DiscoveryRunner variant="outline" />
+            </div>
           </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <Link to="/apply" className={buttonClasses('primary', 'md', 'bg-brand text-white shadow-lg shadow-primary/25')}>
-              <Zap className="h-4 w-4" aria-hidden="true" /> Start Apply Mode
-            </Link>
-            <DiscoveryRunner />
-          </div>
+        </section>
+        <div className="animate-fade-up lg:col-span-2">
+          <TodayCard />
         </div>
-      </section>
+      </div>
 
       <section aria-label="Key metrics">
         {summary.isPending ? (
           <div className="grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-6">
             {Array.from({ length: 6 }, (_, i) => (
-              <Skeleton key={i} className="h-[104px] rounded-xl" />
+              <Skeleton key={i} className="h-[112px] rounded-2xl" />
             ))}
           </div>
         ) : summary.isError ? (
@@ -80,7 +85,7 @@ export default function DashboardPage() {
         ) : (
           <div className="stagger grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-6">
             {widgets.map((w) => (
-              <Link key={w.label} to={w.to} className="rounded-xl focus-visible:outline-2 focus-visible:outline-ring">
+              <Link key={w.label} to={w.to} className="rounded-2xl focus-visible:outline-2 focus-visible:outline-ring">
                 <StatCard label={w.label} value={w.value} hint={w.hint} icon={w.icon} className="lift h-full" />
               </Link>
             ))}

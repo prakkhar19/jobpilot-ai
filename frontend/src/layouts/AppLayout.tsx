@@ -3,6 +3,7 @@ import { Suspense, useState } from 'react'
 import { Navigate, Outlet, useLocation } from 'react-router-dom'
 import { CommandPalette } from '@/components/layout/CommandPalette'
 import { Logo } from '@/components/layout/Logo'
+import { MobileTabBar } from '@/components/layout/MobileTabBar'
 import { NotificationsBell } from '@/components/layout/NotificationsBell'
 import { Sidebar, SidebarNav } from '@/components/layout/Sidebar'
 import { ThemeToggle } from '@/components/layout/ThemeToggle'
@@ -52,13 +53,14 @@ export function AppLayout() {
             <UserMenu />
           </div>
         </header>
-        <main id="main" tabIndex={-1} className="mx-auto w-full max-w-7xl flex-1 px-4 py-6 focus:outline-none sm:px-6 lg:px-8">
+        <main id="main" tabIndex={-1} className="mx-auto w-full max-w-7xl flex-1 px-4 pt-6 pb-32 focus:outline-none sm:px-6 lg:px-8 lg:pb-8">
           <Suspense key={location.pathname} fallback={<LoadingState />}>
             <div key={location.pathname} className="animate-fade-up">
               <Outlet />
             </div>
           </Suspense>
         </main>
+        <MobileTabBar />
       </div>
     </div>
   )

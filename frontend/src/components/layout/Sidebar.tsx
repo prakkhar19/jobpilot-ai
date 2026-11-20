@@ -24,9 +24,9 @@ export function SidebarNav({ onNavigate }: { onNavigate?: () => void }) {
                     onClick={onNavigate}
                     className={({ isActive }) =>
                       cn(
-                        'group relative flex items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-sm font-medium transition-all duration-200',
+                        'group relative flex items-center gap-2.5 rounded-xl px-2.5 py-2 text-sm font-medium transition-all duration-200',
                         isActive
-                          ? 'bg-primary-soft text-primary before:absolute before:top-1.5 before:bottom-1.5 before:-left-3 before:w-1 before:rounded-r-full before:bg-brand'
+                          ? 'bg-surface-2 text-fg shadow-[inset_0_1px_0_var(--card-highlight)] before:absolute before:top-2 before:bottom-2 before:-left-3 before:w-1 before:rounded-r-full before:bg-primary before:shadow-[0_0_12px_var(--glow)] [&>svg]:text-primary'
                           : 'text-muted hover:translate-x-0.5 hover:bg-surface-2 hover:text-fg',
                       )
                     }

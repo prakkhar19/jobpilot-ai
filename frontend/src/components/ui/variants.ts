@@ -6,13 +6,13 @@ export type ButtonSize = 'sm' | 'md' | 'icon' | 'icon-sm'
 
 export function buttonClasses(variant: ButtonVariant = 'primary', size: ButtonSize = 'md', extra?: string): string {
   return cn(
-    'inline-flex items-center justify-center gap-2 rounded-lg font-medium whitespace-nowrap transition-colors',
+    'inline-flex items-center justify-center gap-2 rounded-xl font-medium whitespace-nowrap transition-colors',
     'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring',
     'disabled:pointer-events-none disabled:opacity-50 aria-disabled:pointer-events-none aria-disabled:opacity-50',
     {
-      'bg-primary text-primary-fg shadow-sm hover:opacity-90': variant === 'primary',
+      'bg-primary text-primary-fg shadow-sm shadow-primary/30 hover:brightness-110': variant === 'primary',
       'bg-surface-2 text-fg hover:bg-border': variant === 'secondary',
-      'border border-border-strong bg-surface text-fg hover:bg-surface-2': variant === 'outline',
+      'border border-border-strong bg-surface/60 text-fg hover:border-primary/40 hover:bg-surface-2': variant === 'outline',
       'text-muted hover:bg-surface-2 hover:text-fg': variant === 'ghost',
       'bg-danger text-white shadow-sm hover:opacity-90 dark:text-bg': variant === 'danger',
     },
@@ -45,6 +45,6 @@ export const toneBar: Record<Tone, string> = {
 }
 
 export const inputClasses =
-  'block w-full rounded-lg border border-border-strong bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtle ' +
+  'block w-full rounded-xl border border-border-strong bg-surface-2/60 px-3 py-2 text-sm text-fg placeholder:text-subtle ' +
   'shadow-xs focus:border-ring focus:outline-2 focus:outline-offset-0 focus:outline-ring/40 ' +
   'disabled:cursor-not-allowed disabled:opacity-60 aria-[invalid=true]:border-danger'

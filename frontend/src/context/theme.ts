@@ -29,8 +29,8 @@ function storedTheme(): Theme | null {
 export function initialTheme(): Theme {
   const stored = storedTheme()
   if (stored) return stored
-  if (typeof window !== 'undefined' && window.matchMedia?.('(prefers-color-scheme: dark)').matches) return 'dark'
-  return 'light'
+  // Dark is the default look; people who prefer light can switch and it is remembered.
+  return 'dark'
 }
 
 export function applyTheme(theme: Theme): void {

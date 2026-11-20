@@ -9,15 +9,30 @@ Your data stays on your server. You bring your own AI provider (or none at all).
 > JobPilot never invents experience. Every AI-generated sentence is fact-checked against the profile
 > *you* approved; anything that adds skills, employers, numbers or credentials you don't have is rejected.
 
-![Dashboard](docs/screenshots/dashboard.png)
+![JobPilot AI dashboard: dark glass cards, neon-green accents, daily apply goal](docs/screenshots/dashboard.png)
+
+<p align="center">
+  <img src="docs/screenshots/mobile-dashboard.png" alt="Dashboard on a phone" width="30%">
+  &nbsp;
+  <img src="docs/screenshots/mobile-apply.png" alt="Apply Mode on a phone" width="30%">
+  &nbsp;
+  <img src="docs/screenshots/mobile-jobs.png" alt="Recommended jobs on a phone" width="30%">
+</p>
+
+<p align="center"><sub>Built for phones too: a floating tab bar, one-tap Apply Mode and large, readable numbers.</sub></p>
 
 <details><summary>More screenshots (synthetic demo data)</summary>
 
-| Explainable match | Resume Studio | Applications |
+| Apply Mode | Explainable match | Resume Studio |
 |---|---|---|
-| ![Job match](docs/screenshots/job-match.png) | ![Resume Studio](docs/screenshots/resume-studio.png) | ![Applications](docs/screenshots/applications.png) |
-| **Analytics** | **Agent activity** | **Integrations** |
-| ![Analytics](docs/screenshots/analytics.png) | ![Agent](docs/screenshots/agent.png) | ![Integrations](docs/screenshots/integrations.png) |
+| ![Apply Mode](docs/screenshots/apply-mode.png) | ![Job match](docs/screenshots/job-match.png) | ![Resume Studio](docs/screenshots/resume-studio.png) |
+| **Applications** | **Analytics** | **Agent activity** |
+| ![Applications](docs/screenshots/applications.png) | ![Analytics](docs/screenshots/analytics.png) | ![Agent](docs/screenshots/agent.png) |
+| **Integrations** | | |
+| ![Integrations](docs/screenshots/integrations.png) | | |
+
+Screenshots are generated from a fictional demo account with `node e2e/readme-screenshots.mjs`
+(see the comment at the top of that file).
 
 </details>
 
@@ -33,6 +48,8 @@ Your data stays on your server. You bring your own AI provider (or none at all).
 | **Matching** | Weighted, configurable score from required/preferred skills, content similarity (TF-IDF or embeddings), experience, title alignment, education and location — every component explained. Title matching understands common variants (Full-Stack/Fullstack, Backend/Back End, LLM/AI/GenAI Engineer). Missing profile data is shown as *unknown*, never as a gap. |
 | **Resume Studio** | Per-job tailored resume: relevant skills first, bullets reordered, best projects selected, optional AI rephrasing with fact-checking. ATS-friendly DOCX + PDF, 4 templates, version history, side-by-side comparison with your original. |
 | **Cover letters** | Concise letters from verified facts (template or AI + fact-check), editable, exportable. |
+| **Apply Mode** | Your best unapplied jobs one at a time, newest first: open the posting, apply (your profile resume handles 1-click applies), tap **I applied**. Tailored resume and cover letter are one tap away, a referral note is ready to copy, and a **daily goal** keeps you moving. |
+| **Form questions** | Paste the free-text questions from an application form ("Relevant experience", "Why this role?") and get answers drafted only from your approved profile and the job posting. Questions only you can answer (salary, notice period, relocation) are flagged, never guessed. |
 | **Applications** | Form fields are inspected and mapped to your verified data; unknown screening questions stop the process and ask you. **Review**, **Assisted** (pre-fill, you submit) or **Authorized automation** modes. Never bypasses CAPTCHA/MFA/logins, never applies twice. |
 | **Tracking & analytics** | Full status pipeline, interviews, notes, follow-ups, audit trail; response/interview rates by source, role, company and resume version; weekly reports. |
 | **Agent** | Background pipeline (discover → analyse → match → generate → prepare) with schedules, daily limits, pause/resume/cancel, locks, retries and logs. |
