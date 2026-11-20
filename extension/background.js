@@ -612,7 +612,7 @@ chrome.alarms.onAlarm.addListener(async (a) => {
       if (step.kind === "ats" && step.jobId) {
         // Don't retry it every cycle: leave it in Needs you.
         await api("/api/ext/result", { method: "POST", body: { job_id: step.jobId, outcome: "needs_you",
-          note: "The company site took too long.", missing: ["The company site took too long — finish it there"] } }).catch(() => {});
+          note: "The employer's page took too long.", missing: ["The employer's page took too long — finish it there"] } }).catch(() => {});
       }
       advance();
     }
