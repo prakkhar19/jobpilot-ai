@@ -114,20 +114,37 @@
         && /^Apply\b/i.test(b.getAttribute("aria-label")) && /company|website|on .+ site/i.test(b.getAttribute("aria-label")));
   }
 
+  // LinkedIn's newer job page has no h1 and hashed class names: fall back to the tab title ("Role | Company | LinkedIn"),
+  // the link to this job, and the "About the job" section.
+  function pageTitle() {
+    const parts = document.title.replace(/^\(\d+\+?\)\s*/, "").split(" | ").map((x) => x.trim());
+    if (parts.length >= 3 && /linkedin/i.test(parts[parts.length - 1])) return parts[0];
+    const id = (location.pathname.match(/\/jobs\/view\/(\d+)/) || [])[1];
+    if (!id) return "";
+    const a = [...document.querySelectorAll(`main a[href*='/jobs/view/${id}']`)].map((x) => text(x)).find((t) => t && t.length < 150);
+    return a || "";
+  }
+  function aboutJob() {
+    const h = [...document.querySelectorAll("h2, h3, span, div")].find((e) => e.childElementCount === 0 && /^About the job$/i.test(text(e)));
+    let box = h;
+    for (let i = 0; box && i < 4 && text(box).length < 300; i++) box = box.parentElement;
+    return box ? text(box) : "";
+  }
+
   function topCard() {
-    const title = text(document.querySelector(".job-details-jobs-unified-top-card__job-title h1, .job-details-jobs-unified-top-card__job-title, .jobs-unified-top-card__job-title, h1"));
+    const title = text(document.querySelector(".job-details-jobs-unified-top-card__job-title h1, .job-details-jobs-unified-top-card__job-title, .jobs-unified-top-card__job-title, h1")) || pageTitle();
     const company = text(document.querySelector(".job-details-jobs-unified-top-card__company-name a, .job-details-jobs-unified-top-card__company-name, .jobs-unified-top-card__company-name a, a[href*='/company/'] span, a[href*='/company/']"));
     const meta = text(document.querySelector(".job-details-jobs-unified-top-card__primary-description-container, .job-details-jobs-unified-top-card__tertiary-description-container, .jobs-unified-top-card__primary-description, .job-details-jobs-unified-top-card__container--two-pane"));
     const prefs = text(document.querySelector(".job-details-preferences-and-skills, .job-details-fit-level-preferences, .jobs-unified-top-card__job-insight"));
-    const description = text(document.querySelector("#job-details, .jobs-description__content, .jobs-box__html-content, [class*='jobs-description'], article"));
+    const description = text(document.querySelector("#job-details, .jobs-description__content, .jobs-box__html-content, [class*='jobs-description'], article")) || aboutJob();
     const wp = /remote/i.test(meta + prefs) ? "remote" : /hybrid/i.test(meta + prefs) ? "hybrid" : /on-?site/i.test(meta + prefs) ? "onsite" : "unknown";
     return { title, company, location: meta.split("·")[0].trim(), description, workplace_type: wp };
   }
 
   async function jobPage({ remaining }) {
     if (remaining <= 0) return;
-    await waitFor(() => text(document.querySelector("h1")), 12000);
-    await waitFor(() => text(document.querySelector("#job-details, .jobs-description__content, [class*='jobs-description'], article")), 6000);
+    await waitFor(() => text(document.querySelector("h1")) || (pageTitle() && document.querySelector("a[href*='/company/']")), 12000);
+    await waitFor(() => text(document.querySelector("#job-details, .jobs-description__content, [class*='jobs-description'], article")) || aboutJob(), 6000);
     await sleep(1200);
     const d = topCard();
     if (!d.title || !d.company) {
@@ -141,6 +158,7 @@
     const external = easy ? null : externalApply();
     if (!easy && !external) {
       await log(`Skip: ${d.title} @ ${d.company} — no Apply button (closed or already applied?)`);
+      await debugDump("linkedin-noapply", document.querySelector("main") || document.body);
       return bg("outcome", { outcome: "skipped" });
     }
     const jobUrl = location.href.split("?")[0];
