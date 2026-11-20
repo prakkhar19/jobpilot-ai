@@ -334,7 +334,24 @@
   function modal() {
     const sel = ".jobs-easy-apply-modal, [data-test-modal-id='easy-apply-modal'], div[role='dialog'].artdeco-modal";
     return deepAll(document, sel).find(visible)
-      || deepAll(document, "[role='dialog']").find((d) => visible(d) && /apply|contact info|resume|submit/i.test(text(d).slice(0, 600)));
+      || deepAll(document, "[role='dialog']").find((d) => visible(d) && /apply|contact info|resume|submit/i.test(text(d).slice(0, 600)))
+      || applyPanel();
+  }
+
+  // LinkedIn's newer Easy Apply isn't a role=dialog: find the "Apply to <Company>" heading and climb to the box that
+  // also holds the step's Next / Review / Submit button.
+  function applyPanel() {
+    const head = deepAll(document, "h1, h2, h3, [role='heading'], span, div").find((e) => e.childElementCount <= 2 && visible(e)
+      && /^Apply to .{2,120}$/.test(text(e)));
+    if (!head) return null;
+    const navBtn = (b) => /^(Next|Review|Submit application|Submit|Continue|Done)$/i.test(text(b))
+      || /Continue to next step|Review your application|Submit application/i.test(b.getAttribute("aria-label") || "");
+    let box = head.parentElement;
+    for (let i = 0; box && i < 12; i++, box = box.parentElement) {
+      if ([...box.querySelectorAll("button")].some((b) => visible(b) && navBtn(b))) return box;
+      if (box === box.ownerDocument.body) break;
+    }
+    return null;
   }
 
   async function easyApply(jobId, resume) {
@@ -356,6 +373,7 @@
     }
     let lastStepKey = "";
     let sameCount = 0;
+    let stuck = 0;
     for (let step = 0; step < 15; step++) {
       await pause(800, 1500);
       const m = modal();
@@ -390,7 +408,17 @@
       const before = text(m).slice(0, 300);
       btn.click();
       await sleep(1500);
-      if (modal() && text(modal()).slice(0, 300) === before) { await tclick(btn); await sleep(1000); }
+      if (modal() && text(modal()).slice(0, 300) === before) { await tclick(btn); await sleep(1500); }
+      if (!submit && modal() && text(modal()).slice(0, 300) === before) {
+        // The step didn't move on (an unanswered or rejected field): hand it to you instead of looping.
+        stuck += 1;
+        if (stuck >= 2) {
+          const empty = collectFields(modal()).filter((f) => f.type !== "file" && !String(f.el?.value || "").trim()).map((f) => f.label).filter(Boolean);
+          await discard();
+          return { outcome: "needs_you", missing: [...new Set(empty)].slice(0, 8).concat(empty.length ? [] : ["A step of the Easy Apply form"]),
+            note: "LinkedIn didn't accept a step of the form." };
+        }
+      } else stuck = 0;
       if (submit) {
         const done = await waitFor(() => !modal() || /application (was )?sent|applied/i.test(text(modal())), 10000);
         await closeModal();
