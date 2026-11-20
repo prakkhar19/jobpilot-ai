@@ -42,9 +42,17 @@
     const href = cardLink(card).href || "";
     return id || (href.match(/\/jobs\/view\/(\d+)/) || href.match(/currentJobId=(\d+)/) || [])[1] || "";
   }
+  // querySelectorAll that also looks inside open shadow roots (LinkedIn's newer pages use them).
+  function deepAll(root, sel) {
+    const out = [...root.querySelectorAll(sel)];
+    root.querySelectorAll("*").forEach((e) => { if (e.shadowRoot) out.push(...deepAll(e.shadowRoot, sel)); });
+    return out;
+  }
+
   function findEasyApply() {
-    return [...document.querySelectorAll("button, a")].find((b) => visible(b) && !b.closest(".job-card-container, li[data-occludable-job-id]")
-      && (/^Easy Apply$/i.test(text(b)) || /Easy Apply to/i.test(b.getAttribute("aria-label") || "")));
+    return deepAll(document, "button, a, [role='button']").find((b) => visible(b) && !b.closest(".job-card-container, li[data-occludable-job-id]")
+      && (/^Easy Apply$/i.test(text(b)) || /Easy Apply to/i.test(b.getAttribute("aria-label") || "")
+        || /\/jobs\/view\/\d+\/apply\b/.test(b.getAttribute("href") || "")));
   }
 
   async function loadAllCards() {
@@ -110,6 +118,7 @@
   function externalApply() {
     const root = document.querySelector(".jobs-apply-button--top-card, .jobs-s-apply, .job-details-jobs-unified-top-card__container--two-pane, main") || document;
     return byText("button, a", /^Apply( on company (website|site))?$/i, root)
+      || deepAll(document, "button, a, [role='button']").find((b) => visible(b) && /^Apply( on company (website|site))?$/i.test(text(b)))
       || [...root.querySelectorAll("button[aria-label], a[aria-label]")].find((b) => visible(b)
         && /^Apply\b/i.test(b.getAttribute("aria-label")) && /company|website|on .+ site/i.test(b.getAttribute("aria-label")));
   }
@@ -159,6 +168,11 @@
     if (!easy && !external) {
       await log(`Skip: ${d.title} @ ${d.company} — no Apply button (closed or already applied?)`);
       await debugDump("linkedin-noapply", document.querySelector("main") || document.body);
+      // Every element mentioning "apply" (incl. open shadow roots), to learn the new layout's Apply control.
+      const hits = deepAll(document, "*").filter((e) => e.childElementCount <= 3 && /apply/i.test(text(e) + " " + (e.getAttribute("aria-label") || ""))
+        && text(e).length < 60).slice(0, 12)
+        .map((e) => `${e.tagName}${e.getAttribute("role") ? "[" + e.getAttribute("role") + "]" : ""} "${text(e)}" aria=${(e.getAttribute("aria-label") || "").slice(0, 50)} href=${(e.getAttribute("href") || "").slice(0, 90)} shadow=${e.getRootNode() !== document} vis=${visible(e)}`);
+      await log(`APPLY-ELEMENTS ${hits.join(" || ").slice(0, 1400)}`);
       return bg("outcome", { outcome: "skipped" });
     }
     const jobUrl = location.href.split("?")[0];
