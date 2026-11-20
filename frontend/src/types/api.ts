@@ -872,6 +872,13 @@ export interface ApplyQueueItem {
   cover_letter: string
 }
 
+export interface FormAnswer {
+  question: string
+  answer: string
+  method: 'llm+factcheck' | 'template' | 'needs_you'
+  note: string
+}
+
 export interface ApplyQueue {
   items: ApplyQueueItem[]
   total: number

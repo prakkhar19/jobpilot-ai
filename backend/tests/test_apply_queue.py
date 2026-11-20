@@ -69,3 +69,46 @@ def test_new_postings_rank_above_old_ones():
     assert age(1) > age(5) > age(10) > age(30)
     # a fresh 62 now outranks a month-old 70
     assert 62 + age(1) > 70 + age(30)
+
+
+EZY_FORM = """Relevant experience *
+Roles, tenure, and specifics that match this opening (field work, team leadership, verification, sourcing, ops — as applicable).
+
+Why this role at EzyHelpers? *
+What draws you to this position and how you would contribute in the first few months."""
+
+
+def test_split_questions_keeps_hints_with_their_question():
+    from app.services.application_answers import split_questions
+
+    qs = split_questions(EZY_FORM)
+    assert len(qs) == 2
+    assert qs[0].startswith("Relevant experience *") and "Roles, tenure" in qs[0]
+    assert qs[1].startswith("Why this role at EzyHelpers?") and "first few months" in qs[1]
+    # no blank line between questions still splits on the '?' / '*' markers
+    assert len(split_questions("Why us?\nTell us more.\nYour notice period? *")) == 2
+
+
+def test_answers_use_only_profile_facts_and_flag_personal_questions(client):
+    job = _setup(client)
+    r = client.post(f"/api/apply-queue/{job['id']}/answers",
+                    json={"questions": EZY_FORM + "\n\nWhat is your expected CTC? *"})
+    assert r.status_code == 200, r.text
+    exp, why, ctc = r.json()
+    profile = client.get("/api/profiles/active").json()
+    first_role = profile["experiences"][0]
+    assert exp["method"] == "template" and first_role["company"] in exp["answer"]
+    assert job["title"] in why["answer"] and "first few months" in why["answer"]
+    assert ctc["method"] == "needs_you" and ctc["answer"] == ""
+    # no skill outside the profile is claimed
+    from app.services.factcheck import build_fact_base, check_text
+    facts = build_fact_base(profile, extra_texts=[job["company"], job["title"], job.get("description_text", "")])
+    for a in (exp, why):
+        assert not [v for v in check_text(a["answer"], facts).violations if "mentions '" in v], a["answer"]
+
+
+def test_answers_validation_and_privacy(client, other_client):
+    job = _setup(client)
+    assert client.post(f"/api/apply-queue/{job['id']}/answers", json={"questions": "  \n \n "}).status_code == 422
+    upload_and_approve(other_client)
+    assert other_client.post(f"/api/apply-queue/{job['id']}/answers", json={"questions": "Why us?"}).status_code == 404

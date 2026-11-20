@@ -11,15 +11,16 @@ from datetime import UTC, datetime
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from fastapi import APIRouter, Query
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 
 from app.agents.runner import get_config
 from app.api.deps import DB, CurrentUser, get_owned_or_404
 from app.core.errors import DomainError
+from app.core.ratelimit import limiter
 from app.models import Application, CoverLetter, Job, JobMatch, ResumeVersion, User
+from app.services import application_answers, cover_letters, tailoring
 from app.services import applications as svc
-from app.services import cover_letters, tailoring
 from app.services.profiles import require_active_profile
 
 router = APIRouter(prefix="/api", tags=["apply-queue"])
@@ -147,3 +148,29 @@ def applied(job_id: uuid.UUID, db: DB, user: CurrentUser) -> None:
         app.cover_letter_id = cl.id
     db.flush()
     svc.mark_submitted(db, user, app, "Applied on the employer's site from Apply Mode.")
+
+
+class QuestionsIn(BaseModel):
+    questions: str = Field(min_length=3, max_length=application_answers.MAX_INPUT_CHARS)
+
+
+class AnswerOut(BaseModel):
+    question: str
+    answer: str
+    method: str
+    note: str = ""
+
+
+@router.post("/apply-queue/{job_id}/answers", response_model=list[AnswerOut])
+def answer_form_questions(job_id: uuid.UUID, body: QuestionsIn, db: DB, user: CurrentUser) -> list[AnswerOut]:
+    """Draft answers to the free-text questions on this job's application form, from the user's profile only."""
+    job = get_owned_or_404(db, Job, job_id, user, "Job")
+    profile = require_active_profile(db, user)
+    if not limiter.hit(f"form-answers:{user.id}", 40, 3600):
+        raise DomainError("Too many requests. Try again in a little while.", status_code=429)
+    cfg = get_config(db, user.id)
+    answers = application_answers.answer_questions(db, user, profile, job, body.questions, use_llm=cfg.use_llm)
+    if not answers:
+        raise DomainError("Paste at least one question from the application form.", status_code=422)
+    db.commit()
+    return [AnswerOut(question=a.question, answer=a.answer, method=a.method, note=a.note) for a in answers]
