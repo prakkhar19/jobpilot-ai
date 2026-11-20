@@ -177,3 +177,15 @@ def test_queue_retries_company_site_jobs_first(client, anon):
     ids = [i["job_id"] for i in q]
     assert ids and ids[0] == first["job_id"]  # parked for the company site → retried first
     assert second["job_id"] not in ids  # waiting for an answer only the user has
+
+
+def test_location_parts():
+    from app.api.extension import _location_part
+
+    loc = "Noida, Uttar Pradesh, India"
+    assert _location_part("State *", loc) == "Uttar Pradesh"
+    assert _location_part("Current City", loc) == "Noida"
+    assert _location_part("Country", loc) == "India"
+    assert _location_part("Country code", loc) is None
+    assert _location_part("State", "Gurugram, India") == "Haryana"
+    assert _location_part("Why this role?", loc) is None

@@ -330,8 +330,37 @@ def _number_option(options: list[str], n: int) -> str | None:
     return None
 
 
+_IN_CITY_STATE = {
+    "delhi": "Delhi", "new delhi": "Delhi", "noida": "Uttar Pradesh", "greater noida": "Uttar Pradesh",
+    "ghaziabad": "Uttar Pradesh", "lucknow": "Uttar Pradesh", "gurugram": "Haryana", "gurgaon": "Haryana",
+    "faridabad": "Haryana", "bengaluru": "Karnataka", "bangalore": "Karnataka", "mumbai": "Maharashtra",
+    "pune": "Maharashtra", "navi mumbai": "Maharashtra", "thane": "Maharashtra", "hyderabad": "Telangana",
+    "chennai": "Tamil Nadu", "coimbatore": "Tamil Nadu", "kolkata": "West Bengal", "ahmedabad": "Gujarat",
+    "jaipur": "Rajasthan", "kochi": "Kerala", "trivandrum": "Kerala", "chandigarh": "Chandigarh", "indore": "Madhya Pradesh",
+    "bhopal": "Madhya Pradesh", "bhubaneswar": "Odisha",
+}
+_LOC_PART = re.compile(r"(?i)^(?:current |your |present )?(city|town|state|province|region|country)\b(?! code)")
+
+
+def _location_part(label: str, location: str) -> str | None:
+    """City / State / Country questions, answered from the profile location ("Noida, Uttar Pradesh, India")."""
+    m = _LOC_PART.match(label.strip())
+    parts = [x.strip() for x in (location or "").split(",") if x.strip()]
+    if not m or not parts:
+        return None
+    kind = m.group(1).lower()
+    if kind in ("city", "town"):
+        return parts[0]
+    if kind == "country":
+        return parts[-1] if len(parts) >= 2 else None
+    if len(parts) >= 3:
+        return parts[-2]
+    return _IN_CITY_STATE.get(parts[0].lower())
+
+
 def _derived_answer(f: FieldIn, p: dict, years: float | None) -> str | None:
-    """Answers that follow directly from the verified profile: years of experience, 'do you know X' questions."""
+    """Answers that follow directly from the verified profile: years of experience, 'do you know X' questions,
+    city/state/country."""
     label = f.label.strip()
     skills = _profile_skills(p)
     if _YEARS.search(label) and years is not None:
@@ -382,7 +411,8 @@ def answers(body: AnswersIn, db: DB, user: ExtUser) -> dict:
     out: dict[str, str | None] = {}
     free_text: list[FieldIn] = []
     for f in body.fields:
-        v = (mapped.get(f.key) or {}).get("value")
+        loc = _location_part(f.label, p.get("location") or "")
+        v = (_pick(f.options, loc) if f.options else loc) if loc else (mapped.get(f.key) or {}).get("value")
         if not v:
             v = _derived_answer(f, p, years)
         if not v and f.options and re.search(r"(?i)notice|join|start", f.label):

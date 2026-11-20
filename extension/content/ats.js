@@ -52,6 +52,11 @@
 
   function needs(missing, note) { return { outcome: "needs_you", missing: [].concat(missing), note: note || "Left open for you." }; }
 
+  // A button that opens the application in a pop-up: record its URL (open-hook in the page) and go there ourselves.
+  let popupUrl = "";
+  window.addEventListener("message", (e) => { if (e.source === window && e.data && e.data.jpOpened) popupUrl = e.data.jpOpened; });
+  await bg("hookOpen").catch(() => {});
+
   async function run() {
     let lastSig = "";
     let samePage = 0;
@@ -87,8 +92,20 @@
       const apply = findButton(APPLY);
       if (apply) {
         await log(`Opening the application form on ${host}…`);
+        // Many careers sites open their application system (Workday, iCIMS, SuccessFactors…) in a new tab, which
+        // Chrome blocks for a scripted click: follow the link here instead.
+        const a = apply.closest("a[href]");
+        if (a && /^https?:/.test(a.href) && (a.target === "_blank" || new URL(a.href).hostname !== location.hostname)) {
+          location.href = a.href;
+          return null;
+        }
         press(apply);
-        await sleep(3500);
+        const opened = await waitFor(() => popupUrl, 3500);
+        if (opened) {
+          await log(`→ ${new URL(opened).hostname}`);
+          location.href = opened;
+          return null;
+        }
         continue;
       }
       if (round > 2) {
