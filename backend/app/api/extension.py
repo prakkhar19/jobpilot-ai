@@ -436,8 +436,8 @@ def answers(body: AnswersIn, db: DB, user: ExtUser) -> dict:
         v = (_pick(f.options, loc) if f.options else loc) if loc else (mapped.get(f.key) or {}).get("value")
         if not v:
             v = _derived_answer(f, p, years)
-        if v and f.type == "number":
-            v = _as_number(v, f.label)
+        if v and (f.type == "number" or re.search(r"(?i)\(?\bin (lpa|lakhs?|lacs?|inr|rs\.?|rupees|numbers?)\b|\blpa\b.{0,3}\??$", f.label)):
+            v = _as_number(v, f.label)  # "What are your salary expectations (in LPA)?" wants "9", not "8-9 LPA"
         if not v and f.options and re.search(r"(?i)notice|join|start", f.label):
             v = _notice_option(f.options, p)
         if not v and f.type == "textarea" or (not v and f.type == "text" and len(f.label) > 40):

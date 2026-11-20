@@ -227,3 +227,9 @@ def test_current_location_questions_answered_with_city():
     assert _location_part("Please select the city you are currently residing or willing to relocate to", loc) == "Noida"
     assert _location_part("State", loc) == "Uttar Pradesh"
     assert _location_part("Are you willing to relocate?", loc) is None
+
+
+def test_lpa_questions_get_plain_numbers():
+    from app.api.extension import _as_number
+    assert _as_number("8-9 LPA", "What are your salary expectations (in LPA)?") == "9"
+    assert _as_number("6 LPA", "What is your current CTC in INR?") == "600000"

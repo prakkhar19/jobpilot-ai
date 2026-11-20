@@ -374,6 +374,7 @@
     let lastStepKey = "";
     let sameCount = 0;
     let stuck = 0;
+    let numFixed = false;
     for (let step = 0; step < 15; step++) {
       await pause(800, 1500);
       const m = modal();
@@ -412,6 +413,17 @@
       if (!submit && modal() && text(modal()).slice(0, 300) === before) {
         // The step didn't move on (an unanswered or rejected field): hand it to you instead of looping.
         stuck += 1;
+        if (stuck >= 1 && !numFixed && /invalid input|enter a (valid |whole |decimal )?number|must be a number|numeric/i.test(text(modal()))) {
+          // Number-only boxes: "8-9 LPA" → "9", "6 LPA" → "6".
+          numFixed = true;
+          for (const f of collectFields(modal())) {
+            const v = String(f.el?.value || "");
+            const nums = v.replace(/,/g, "").match(/\d+(\.\d+)?/g);
+            if (f.el && nums && /[^\d.]/.test(v.trim())) setValue(f.el, String(Math.max(...nums.map(Number))));
+          }
+          stuck = 0;
+          continue;
+        }
         if (stuck >= 2) {
           const fs = collectFields(modal());
           await log(`EASY-STUCK btn="${text(btn)}" fields=${fs.length} [${fs.map((f) => `${f.label}=${String(f.el?.value || "").slice(0, 20)}`).join("; ").slice(0, 500)}] panel="${text(modal()).slice(0, 700)}"`);
