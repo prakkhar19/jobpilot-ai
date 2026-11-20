@@ -18,7 +18,12 @@
     const status = (decodeURIComponent(location.search).match(/"\d+"\s*:\s*(\d+)/) || [])[1] || "";
     await log(`Naukri says: "${message.slice(0, 200)}" (status ${status || "?"})`);
     const job = hop.job;
-    const ok = /applied|success|sent|submitted/i.test(message) && !/fail|error|unable|could not|not applied/i.test(message);
+    if (/redirected to the company|company'?s? (web)?site/i.test(message)) {
+      const ext = await bg("finishExternal");
+      if (ext.url) return; // the worker tab now goes to the employer's page; ats.js applies there
+      await log("Naukri opened the company site but the tab wasn't caught.");
+    }
+    const ok = /applied|success|sent|submitted/i.test(message) && !/fail|error|unable|could not|not applied|redirected/i.test(message);
     const res = ok ? { outcome: "submitted", note: `Applied via Naukri: ${message.slice(0, 300)}` }
       : { outcome: "needs_you", note: `Naukri: ${message.slice(0, 300) || "no status message"}`,
           missing: [message ? `Naukri said: ${message.slice(0, 120)}` : "Apply on the company site"] };

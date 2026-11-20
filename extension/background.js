@@ -31,8 +31,11 @@ const STEP_TIMEOUT_MIN = { "linkedin-search": 3, "linkedin-job": 5, "naukri-sear
 
 let external = null; // { opener, tab, url, done, at } while following an "Apply on company site" click
 
+// Job boards often open the employer's site with window.open(..., "noopener"), so the new tab has no opener:
+// take any tab created within a few seconds of the click.
 chrome.tabs.onCreated.addListener((tab) => {
-  if (external && !external.done && tab.openerTabId === external.opener && external.tab == null) external.tab = tab.id;
+  if (!external || external.done || external.tab != null) return;
+  if (tab.openerTabId === external.opener || Date.now() - external.at < 15000) external.tab = tab.id;
 });
 let settleTimer = null;
 // Employer pages: load the generic form filler (content/ats.js) into every frame once the page has loaded. Count page
@@ -356,6 +359,28 @@ async function handle(msg, sender) {
       const s = await state();
       const active = !!(external && !external.done && external.opener === tabId && tabId === s.workerTabId);
       return { active, job: active ? external.job : null };
+    }
+    // The job board's own page says it sent you to the employer (Naukri "showAcp"): take the employer tab it opened,
+    // close it, and continue there in the worker tab with ats.js.
+    case "finishExternal": {
+      const until = Date.now() + 15000;
+      while (Date.now() < until && !(external && external.tab != null && /^https?:/.test(external.url) && !JOB_BOARDS.test(external.url))) {
+        await new Promise((r) => setTimeout(r, 500));
+      }
+      const ex = external;
+      external = null;
+      if (!ex || ex.tab == null || !/^https?:/.test(ex.url) || JOB_BOARDS.test(ex.url)) return { url: "" };
+      await new Promise((r) => setTimeout(r, 2500)); // let tracking redirects finish
+      const t = await chrome.tabs.get(ex.tab).catch(() => null);
+      const url = (t && /^https?:/.test(t.url || "") && !JOB_BOARDS.test(t.url)) ? t.url : ex.url;
+      chrome.tabs.remove(ex.tab).catch(() => {});
+      const s = await state();
+      const steps = [...s.steps];
+      steps[s.stepIndex] = { kind: "ats", url, jobId: ex.job?.jobId, label: `${ex.job?.company}: ${ex.job?.title}` };
+      await set({ steps, stepStartedAt: Date.now() });
+      await log(`Company site: ${new URL(url).hostname} — applying there.`);
+      chrome.tabs.update(tabId, { url });
+      return { url };
     }
     case "awaitExternal": {
       if (external) external.awaiting = true;
