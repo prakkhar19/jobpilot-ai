@@ -113,7 +113,7 @@ async function state() {
   const s = await get(null);
   const merged = { ...DEFAULTS, ...s, settings: { ...DEFAULTS.settings, ...(s.settings || {}) } };
   merged.settings.platforms = { ...DEFAULTS.settings.platforms, ...((s.settings || {}).platforms || {}) };
-  const today = new Date().toISOString().slice(0, 10);
+  const today = new Date().toLocaleDateString('en-CA'); // local date (YYYY-MM-DD), not UTC
   if (merged.stats.date !== today) merged.stats = { date: today, applied: 0, skipped: 0, needsYou: 0, outreach: 0 };
   return merged;
 }
