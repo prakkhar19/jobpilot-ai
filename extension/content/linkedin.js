@@ -188,6 +188,7 @@
     }
     await log(`Applying (${ev.score}): ${d.title} @ ${d.company}`);
     const resume = await bg("resume", { jobId: ev.job_id });
+    await log(`EASY-BTN ${easy.tagName} "${text(easy).slice(0, 40)}" aria=${(easy.getAttribute("aria-label") || "").slice(0, 60)} href=${(easy.getAttribute("href") || "").slice(0, 120)} inFrame=${easy.ownerDocument !== document}`);
     easy.click();
     const res = await easyApply(ev.job_id, resume);
     await bg("api", { path: "/api/ext/result", method: "POST",
@@ -277,6 +278,11 @@
         return `${(f.getAttribute("src") || "").slice(0, 90)} [${f.getAttribute("data-testid") || ""}] vis=${visible(f)} same=${same} "${body}"`;
       });
       const dialogs = deepAll(document, "[role='dialog'], dialog, [aria-modal='true']").map((d) => `${d.tagName} vis=${visible(d)} "${text(d).slice(0, 100)}"`);
+      let furl = "";
+      try { furl = document.querySelector("iframe[data-testid='interop-iframe']")?.contentWindow?.location.href || ""; } catch (_) { /* ignore */ }
+      const hits = deepAll(document, "button, a, [role='button'], h2, h3").filter((e) => visible(e) && /apply|contact info|submit|next|resume/i.test(text(e) + (e.getAttribute("aria-label") || "")) && text(e).length < 80)
+        .slice(0, 15).map((e) => `${e.tagName} "${text(e).slice(0, 40)}" aria=${(e.getAttribute("aria-label") || "").slice(0, 40)} href=${(e.getAttribute("href") || "").slice(0, 70)} f=${e.ownerDocument !== document}`);
+      await log(`EASY-APPLY-DIAG2 frameUrl=${furl.slice(0, 150)} tabUrl=${location.href.slice(0, 120)} | ${hits.join(" || ")}`.slice(0, 1800));
       await log(`EASY-APPLY-DIAG url=${location.pathname}${location.search.slice(0, 80)} | FRAMES ${frames.join(" || ")} | DIALOGS ${dialogs.join(" || ")}`.slice(0, 1800));
       return { outcome: "failed", note: "Easy Apply window did not open." };
     }
