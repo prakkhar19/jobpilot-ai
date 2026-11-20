@@ -70,6 +70,7 @@
       const sig = location.href + "|" + body.slice(0, 1500);
       samePage = sig === lastSig ? samePage + 1 : 0;
       lastSig = sig;
+      if (samePage >= 3) await window.JP.debugDump("ats-stuck");
       if (samePage >= 3) return needs(visibleErrors().length ? visibleErrors() : ["This page didn't move on"], "Stuck on this page — left open for you.");
 
       const pw = passwords();

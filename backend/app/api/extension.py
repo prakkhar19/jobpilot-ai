@@ -465,6 +465,11 @@ def result(body: ResultIn, db: DB, user: ExtUser) -> dict:
     if body.apply_url.startswith(("https://", "http://")) and not job.official_url:
         job.official_url = job.application_url = body.apply_url
     app, _ = svc.get_or_create(db, user, job, actor="agent")
+    if body.outcome == "submitted" and body.note.startswith("Already applied on Naukri") and (
+            _company_site_only(app) or (app.status == "needs_input" and job.official_url)):
+        # Naukri shows "Applied" as soon as it redirects you to the employer; that's not an application.
+        db.commit()
+        return {"status": app.status, "ignored": True}
     if body.outcome == "submitted":
         if app.status not in svc.POST_SUBMISSION:
             app.submitted_at = datetime.now(UTC)
@@ -548,6 +553,8 @@ def outreach_log(body: OutreachLogIn, db: DB, user: ExtUser) -> None:
 # ----------------------------------------------------------------------------- company career-page queue
 
 _ATS = re.compile(r"(?i)greenhouse\.io|lever\.co|ashbyhq\.com|workable\.com|smartrecruiters\.com")
+_JOB_BOARD_HOST = re.compile(r"(?i)^https?://([a-z0-9-]+\.)*(linkedin|naukri|ambitionbox|iimjobs|indeed|glassdoor|foundit|"
+                             r"wellfound|instahyre)\.[a-z.]+/")
 _LINKEDIN_JOB = re.compile(r"(?i)^https://(www\.)?linkedin\.com/(comm/)?jobs/view/(\d+)")
 _NAUKRI_JOB = re.compile(r"(?i)^https://(www\.)?naukri\.com/(jd/)?(job-listings-[^?#\s]+)")
 
@@ -556,8 +563,8 @@ def queue_step(job: Job) -> dict | None:
     """How the extension should apply to this job: on the company page, or via its LinkedIn/Naukri page
     (which follows "Apply on company site" when there's no in-site apply)."""
     official = job.official_url or ""
-    if _ATS.search(official):
-        return {"kind": "ats", "url": official}
+    if official.startswith(("https://", "http://")) and not _JOB_BOARD_HOST.search(official):
+        return {"kind": "ats", "url": official}  # the employer's own page (found earlier): go straight there
     url = job.application_url or job.posting_url or ""
     if _ATS.search(url):
         return {"kind": "ats", "url": url}

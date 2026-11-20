@@ -110,8 +110,14 @@
       const ev = await bg("api", { path: "/api/ext/evaluate", method: "POST",
         body: { platform: "naukri", url: location.href.split("?")[0], ...d } });
       if (ev.decision === "apply") {
-        await report({ jobId: ev.job_id, title: d.title, company: d.company, url: location.href },
-          { outcome: "submitted", note: "Already applied on Naukri" });
+        const r = await bg("api", { path: "/api/ext/result", method: "POST", body: { job_id: ev.job_id, outcome: "submitted",
+          note: "Already applied on Naukri" } });
+        if (r && r.ignored) {
+          await log(`${d.title} @ ${d.company}: Naukri says "Applied" only because it sent you to the company site — still to do there.`);
+          return bg("outcome", { outcome: "skipped" });
+        }
+        await bg("outcome", { outcome: "submitted", jobId: ev.job_id, title: d.title, company: d.company, url: location.href, platform: "naukri" });
+        await log(`✅ Already applied: ${d.title} @ ${d.company}`);
       }
       return;
     }
