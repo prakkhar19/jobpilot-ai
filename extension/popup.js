@@ -80,7 +80,7 @@ $("toggle").onclick = async () => {
 $("save").onclick = async () => {
   const n = (id, d) => Math.max(0, parseInt($(id).value, 10) || d);
   await send("saveSettings", { settings: {
-    dailyCap: n("dailyCap", 40), outreachCap: n("outreachCap", 15), perCompany: n("perCompany", 2),
+    dailyCap: n("dailyCap", 150), outreachCap: n("outreachCap", 15), perCompany: n("perCompany", 2),
     pagesPerSearch: Math.max(1, n("pages", 2)), cycleMinutes: Math.max(15, n("cycle", 60)), outreach: $("outreach").checked,
     platforms: { linkedin: $("pLinkedin").checked, naukri: $("pNaukri").checked, instahyre: $("pInstahyre").checked, company: $("pCompany").checked },
   } });

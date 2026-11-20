@@ -7,13 +7,13 @@ const DEFAULTS = {
   server: "http://localhost:8080",
   token: "",
   settings: {
-    dailyCap: 40,
+    dailyCap: 150,
     platforms: { linkedin: true, naukri: true, instahyre: true, company: true },
     outreach: true,
     outreachCap: 15,
     perCompany: 2,
-    pagesPerSearch: 2,
-    cycleMinutes: 60,
+    pagesPerSearch: 4,
+    cycleMinutes: 30,
   },
   running: false,
   steps: [],
@@ -113,6 +113,13 @@ async function state() {
   const s = await get(null);
   const merged = { ...DEFAULTS, ...s, settings: { ...DEFAULTS.settings, ...(s.settings || {}) } };
   merged.settings.platforms = { ...DEFAULTS.settings.platforms, ...((s.settings || {}).platforms || {}) };
+  if ((s.settingsRev || 0) < 2) { // one-time bump to the higher-volume defaults; later edits in the popup stick
+    merged.settings.dailyCap = Math.max(merged.settings.dailyCap, 150);
+    merged.settings.pagesPerSearch = Math.max(merged.settings.pagesPerSearch, 4);
+    merged.settings.cycleMinutes = Math.min(merged.settings.cycleMinutes, 30);
+    merged.settingsRev = 2;
+    await set({ settings: merged.settings, settingsRev: 2 });
+  }
   const today = new Date().toLocaleDateString('en-CA'); // local date (YYYY-MM-DD), not UTC
   if (merged.stats.date !== today) merged.stats = { date: today, applied: 0, skipped: 0, needsYou: 0, outreach: 0 };
   return merged;
