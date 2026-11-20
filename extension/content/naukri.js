@@ -112,6 +112,10 @@
       if (ev.decision === "apply") {
         const r = await bg("api", { path: "/api/ext/result", method: "POST", body: { job_id: ev.job_id, outcome: "submitted",
           note: "Already applied on Naukri" } });
+        if (r && r.ignored && r.apply_url) {
+          await log(`${d.title} @ ${d.company}: going straight to the employer's page.`);
+          return bg("gotoAts", { url: r.apply_url, jobId: ev.job_id, label: `${d.company}: ${d.title}` });
+        }
         if (r && r.ignored) {
           await log(`${d.title} @ ${d.company}: Naukri says "Applied" only because it sent you to the company site — still to do there.`);
           return bg("outcome", { outcome: "skipped" });

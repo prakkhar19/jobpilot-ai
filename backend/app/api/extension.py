@@ -484,6 +484,14 @@ def result(body: ResultIn, db: DB, user: ExtUser) -> dict:
     if body.outcome == "submitted" and body.note.startswith("Already applied on Naukri") and (
             _company_site_only(app) or (app.status == "needs_input" and job.official_url)):
         # Naukri shows "Applied" as soon as it redirects you to the employer; that's not an application.
+        employer = job.official_url or ""
+        if employer and not _JOB_BOARD_HOST.match(employer):
+            db.commit()  # the extension goes straight to the employer's page
+            return {"status": app.status, "ignored": True, "apply_url": employer}
+        # The employer link was never captured and Naukri no longer offers it: park it for you instead of
+        # retrying it every cycle.
+        app.missing_fields = [{"name": "employer_link", "label": NO_EMPLOYER_LINK, "required": True}]
+        svc.event(db, app, "needs_input", NO_EMPLOYER_LINK, actor="agent", to_status="needs_input")
         db.commit()
         return {"status": app.status, "ignored": True}
     if body.outcome == "submitted":
@@ -621,6 +629,9 @@ def queue(db: DB, user: ExtUser, limit: int = 30) -> list[dict]:
         if step:
             out.append({"job_id": str(job.id), "title": job.title, "company": job.company, "score": round(score, 1), **step})
     return out[: max(1, min(limit, 100))]
+
+
+NO_EMPLOYER_LINK = "Open this job on Naukri and finish on the employer's page (Naukri no longer shows its link)"
 
 
 def _company_site_only(app: Application) -> bool:

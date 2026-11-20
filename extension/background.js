@@ -408,6 +408,17 @@ async function handle(msg, sender) {
 
     // The job board's own page says it sent you to the employer (Naukri "showAcp"): take the employer tab it opened,
     // close it, and continue there in the worker tab with ats.js.
+    // Known employer page for this job: continue there in the worker tab with ats.js.
+    case "gotoAts": {
+      const s = await state();
+      const steps = [...s.steps];
+      steps[s.stepIndex] = { kind: "ats", url: msg.url, jobId: msg.jobId, label: msg.label };
+      await set({ steps, stepStartedAt: Date.now() });
+      await log(`Company site: ${new URL(msg.url).hostname} — applying there.`);
+      chrome.tabs.update(tabId, { url: msg.url });
+      return { url: msg.url };
+    }
+
     case "finishExternal": {
       const good = (u) => /^https?:/.test(u || "") && !JOB_BOARDS.test(u);
       // Naukri's redirect endpoint (records the apply, then forwards to the employer): open it in the worker tab and let
