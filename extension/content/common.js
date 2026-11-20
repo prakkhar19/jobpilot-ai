@@ -86,6 +86,36 @@
     return clean(el.placeholder || el.name || "");
   }
 
+  // The question a radio group asks. Sites mark it up in many ways (legend, aria-labelledby, a div above the options);
+  // the reliable part: it's the first line of text in the smallest block holding the whole group that isn't an option.
+  function radioQuestion(el, name, root = document) {
+    const clean = (t) => (t || "").replace(/\s+/g, " ").replace(/[*✱]\s*$/, "").trim();
+    const group = [...root.querySelectorAll(`input[type='radio'][name="${CSS.escape(name)}"]`)];
+    const optText = new Set(group.map((r) => clean(text(root.querySelector(`label[for="${CSS.escape(r.id || "_")}"]`)) || text(r.closest("label")) || r.value).toLowerCase()));
+    const lg = el.closest("fieldset")?.querySelector("legend");
+    if (lg && clean(text(lg)) && !optText.has(clean(text(lg)).toLowerCase())) return clean(text(lg));
+    const rg = el.closest("[role='radiogroup'], [role='group']");
+    const by = rg?.getAttribute("aria-labelledby");
+    if (by) {
+      const t = clean(by.split(/\s+/).map((id) => text(document.getElementById(id))).join(" "));
+      if (t) return t;
+    }
+    if (rg?.getAttribute("aria-label")) return clean(rg.getAttribute("aria-label"));
+    let box = el.parentElement;
+    while (box && box !== root && !group.every((r) => box.contains(r))) box = box.parentElement;
+    for (let i = 0; box && i < 4; i++, box = box.parentElement) {
+      const lines = (box.innerText || "").split("\n").map(clean).filter(Boolean);
+      const onlyOptions = (l) => {
+        let rest = l.toLowerCase();
+        for (const o of [...optText].sort((a, b) => b.length - a.length)) if (o) rest = rest.split(o).join(" ");
+        return rest.replace(/[\s/|,.*✱:-]/g, "").length < 3;
+      };
+      const q = lines.find((l) => !onlyOptions(l));
+      if (q) return q.slice(0, 300);
+    }
+    return clean(labelFor(el, root));
+  }
+
   // Collect the fillable fields inside `root`. Radios sharing a name become one field with options.
   function collectFields(root = document) {
     const fields = [];
@@ -104,9 +134,7 @@
         const fs = el.closest("fieldset") || el.closest("[role='radiogroup']") || el.parentElement?.parentElement;
         const optLabel = text(root.querySelector(`label[for="${CSS.escape(el.id || "_")}"]`)) || text(el.closest("label")) || el.value;
         if (!radios.has(name)) {
-          const lg = fs?.querySelector("legend, [class*='label'], [class*='title']");
-          const f = { key: `r:${name}`, label: (text(lg) || labelFor(el, root)).replace(/[*✱]\s*$/, ""), type: "radio",
-            options: [], required, els: [] };
+          const f = { key: `r:${name}`, label: radioQuestion(el, name, root), type: "radio", options: [], required, els: [] };
           radios.set(name, f);
           fields.push(f);
         }

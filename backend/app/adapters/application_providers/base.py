@@ -75,10 +75,11 @@ _STANDARD = [
 _FACT_INTENTS = [
     (re.compile(r"(?i)(legally )?(authori[sz]ed|eligible|right) to work"), ("work authorization", "work authorisation", "authorized to work", "right to work")),
     (re.compile(r"(?i)sponsor"), ("sponsorship", "visa sponsorship", "require sponsorship")),
-    (re.compile(r"(?i)notice period|start date|when can you start|availability"), ("notice period", "availability", "start date")),
+    (re.compile(r"(?i)notice period|start date|when can you (start|join)|availability|available to (start|join)|how soon can you"),
+     ("notice period", "availability", "start date")),
     (re.compile(r"(?i)(current|present|existing|last drawn)\s*(annual\s*)?(ctc|salary|compensation|package|fixed)|ctc.{0,20}current"),
      ("current ctc", "current salary", "current compensation")),
-    (re.compile(r"(?i)salary|compensation expectation|(expected|desired)\s*(annual\s*)?(ctc|compensation|package)|\bectc\b"),
+    (re.compile(r"(?i)salary|compensation expectation|(expected|desired)\s*(annual\s*)?(ctc|compensation|package|pay)|\bectc\b|pay rate"),
      ("expected ctc", "salary expectation", "expected salary", "compensation")),
     (re.compile(r"(?i)relocat"), ("relocation", "willing to relocate")),
     (re.compile(r"(?i)pronoun"), ("pronouns",)),
