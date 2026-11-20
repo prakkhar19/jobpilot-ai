@@ -207,18 +207,23 @@ async function buildSteps() {
     } catch (e) { await log(`Matched-jobs queue: ${e.message}`); }
   }
   const targets = searchTargets(cfg);
+  // Experience filters: LinkedIn levels 1 internship, 2 entry, 3 associate, 4 mid-senior; Naukri takes your years.
+  const years = typeof cfg.years_experience === "number" ? cfg.years_experience : null;
+  const levels = years == null ? "" : years < 2 ? "1,2,3" : years < 5 ? "2,3,4" : "";
   if (!targets.length) await log("No target roles set — add them in JobPilot → Agent settings (or a profile headline).");
   for (const t of targets) {
     if (p.linkedin) {
       for (let page = 0; page < s.settings.pagesPerSearch; page++) {
         // f_TPR = past 24h, f_WT=2 remote. Not limited to Easy Apply: company-site jobs are followed to the employer.
         let url = `https://www.linkedin.com/jobs/search/?keywords=${enc(t.role)}&location=${enc(t.location)}&f_TPR=r86400&sortBy=DD&start=${page * 25}`;
+        if (levels) url += `&f_E=${enc(levels)}`;
         if (t.remote) url += "&f_WT=2";
         steps.push({ kind: "linkedin-search", url, label: `LinkedIn: ${t.role} · ${t.remote ? "Remote" : t.location}` });
       }
     }
     if (p.naukri) {
       let url = `https://www.naukri.com/${slug(t.role)}-jobs${t.remote ? "" : `-in-${slug(t.location)}`}?jobAge=3`;
+      if (years != null) url += `&experience=${Math.max(0, Math.round(years))}`; // jobs whose range includes your years
       if (t.remote) url += "&wfhType=2";
       steps.push({ kind: "naukri-search", url, label: `Naukri: ${t.role} · ${t.remote ? "Remote" : t.location}` });
     }

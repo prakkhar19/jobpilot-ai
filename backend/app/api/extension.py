@@ -118,6 +118,8 @@ def config(db: DB, user: ExtUser) -> dict:
         "exclude_companies": cfg.exclude_companies,
         "min_match_score": cfg.min_match_score,
         "applied_today": _applied_today(db, user, cfg.timezone),
+        # Lets searches ask the job boards for roles at this level only (no Senior/Lead results to skip).
+        "years_experience": round(total_experience_years([_ExpRow(e) for e in p.get("experiences") or []]) or 0, 1),
         "profile": {
             "full_name": p.get("full_name", ""), "email": p.get("email") or user.email, "phone": p.get("phone", ""),
             "location": p.get("location", ""), "linkedin_url": p.get("linkedin_url", ""),
