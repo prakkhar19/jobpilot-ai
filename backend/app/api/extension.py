@@ -368,11 +368,11 @@ def _location_part(label: str, location: str) -> str | None:
 
 
 def _as_number(value: str, label: str) -> str | None:
-    """Number-only inputs: "6 LPA" → "6" (lakhs) or "600000" when the field asks for rupees; "8-9 LPA" → the top."""
+    """Number-only inputs: "6 LPA" → "6" (lakhs) or "600000" when the field asks for rupees; "8-9 LPA" → the bottom (safer on strict budget filters)."""
     nums = [float(x) for x in re.findall(r"\d+(?:\.\d+)?", value.replace(",", ""))]
     if not nums:
         return None
-    n = max(nums)
+    n = min(nums)
     lakhs = re.search(r"(?i)lpa|lakh|lac\b", value)
     if lakhs and re.search(r"(?i)rupee|inr|₹|\bper annum\b|\bp\.?a\.?\b|annual", label) and not re.search(r"(?i)lakh|lac|lpa", label):
         n *= 100000
@@ -384,6 +384,20 @@ def _derived_answer(f: FieldIn, p: dict, years: float | None) -> str | None:
     city/state/country."""
     label = f.label.strip()
     skills = _profile_skills(p)
+    if _YEARS.search(label):
+        # Per-skill years the owner stated, as application facts like "React experience": "2 years".
+        per_skill = {}
+        for k, v in (p.get("application_facts") or {}).items():
+            m = re.match(r"(?i)^(.+?)\s+experience$", str(k).strip())
+            num = re.search(r"\d+(?:\.\d+)?", str(v))
+            if m and num and normalize_label(m.group(1)) not in ("total", "years of", "work", "professional"):
+                per_skill[skill_key(m.group(1))] = float(num.group(0))
+        tail = label.lower().split("experience")[-1] or label.lower()
+        for w in re.findall(r"[a-z0-9+#.\-]+(?:\s[a-z0-9+#.\-]+)?", tail):
+            for cand in (w, w.split(" ")[0]):
+                if skill_key(cand) in per_skill:
+                    n = int(round(per_skill[skill_key(cand)]))
+                    return _number_option(f.options, n) if f.type in ("select", "radio") else str(n)
     if _YEARS.search(label) and years is not None:
         mentioned = _mentions(label, skills)
         asks_specific = bool(re.search(r"(?i)\b(with|in|using|of)\b\s+\w", label.split("experience")[-1]))

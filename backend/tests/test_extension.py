@@ -216,7 +216,7 @@ def test_ctc_relocation_and_authorization_facts():
     assert not missing
     assert _as_number("6 LPA", "Current CTC (in lakhs)") == "6"
     assert _as_number("6 LPA", "Current annual salary in INR") == "600000"
-    assert _as_number("8-9 LPA", "Expected CTC") == "9"
+    assert _as_number("8-9 LPA", "Expected CTC") == "8"
 
 
 def test_current_location_questions_answered_with_city():
@@ -231,5 +231,5 @@ def test_current_location_questions_answered_with_city():
 
 def test_lpa_questions_get_plain_numbers():
     from app.api.extension import _as_number
-    assert _as_number("8-9 LPA", "What are your salary expectations (in LPA)?") == "9"
+    assert _as_number("8-9 LPA", "What are your salary expectations (in LPA)?") == "8"
     assert _as_number("6 LPA", "What is your current CTC in INR?") == "600000"
