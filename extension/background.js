@@ -180,8 +180,12 @@ async function resumeFor(jobId) {
 const enc = encodeURIComponent;
 const slug = (s) => s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
 
-function searchTargets(cfg) {
-  const roles = (cfg.target_roles || []).filter(Boolean).slice(0, 4);
+// Each cycle searches ROLES_PER_CYCLE roles, rotating through the whole target list so every role gets searched.
+const ROLES_PER_CYCLE = 5;
+function searchTargets(cfg, offset = 0) {
+  const all = (cfg.target_roles || []).filter(Boolean);
+  const n = Math.min(ROLES_PER_CYCLE, all.length);
+  const roles = Array.from({ length: n }, (_, i) => all[(offset + i) % all.length]);
   const locs = (cfg.locations || []).filter(Boolean).slice(0, 3);
   const country = (cfg.countries || [])[0] || "India";
   const wantRemote = !cfg.workplace_types?.length || cfg.workplace_types.includes("remote");
@@ -224,7 +228,10 @@ async function buildSteps() {
   if (p.naukri && s.naukriRefreshedOn !== s.stats.date) {
     steps.push({ kind: "naukri-profile", url: "https://www.naukri.com/mnjuser/profile", label: "Naukri: refresh profile" });
   }
-  const targets = searchTargets(cfg);
+  const offset = (s.roleOffset || 0) % Math.max(1, (cfg.target_roles || []).length);
+  const targets = searchTargets(cfg, offset);
+  await set({ roleOffset: offset + ROLES_PER_CYCLE });
+  if (targets.length) await log(`Searching roles this round: ${[...new Set(targets.map((t) => t.role))].join(", ")}`);
   // Experience filters: LinkedIn levels 1 internship, 2 entry, 3 associate, 4 mid-senior; Naukri takes your years.
   const years = typeof cfg.years_experience === "number" ? cfg.years_experience : null;
   const levels = years == null ? "" : years < 2 ? "1,2,3" : years < 5 ? "2,3,4" : "";
