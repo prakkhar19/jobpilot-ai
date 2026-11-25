@@ -24,7 +24,7 @@ async function render() {
   $("current").textContent = s.running ? (step ? `Step ${s.stepIndex + 1}/${s.steps.length}: ${step.label}` : "Waiting for the next cycle…") : "";
 
   $("sApplied").textContent = s.stats.applied;
-  $("sNeeds").textContent = s.needsYou.length;
+  $("sNeeds").textContent = s.stats.needsYou;
   $("sOut").textContent = s.stats.outreach;
   $("sSkip").textContent = s.stats.skipped;
 
