@@ -83,6 +83,11 @@ _FACT_INTENTS = [
      ("expected ctc", "salary expectation", "expected salary", "compensation")),
     (re.compile(r"(?i)relocat"), ("relocation", "willing to relocate")),
     (re.compile(r"(?i)pronoun"), ("pronouns",)),
+    (re.compile(r"(?i)postal|post code|pin\s*-?\s*code|\bzip\b"), ("postal code", "pincode", "zip code")),
+    (re.compile(r"(?i)^(street|(street |home |current |residential |permanent |mailing |postal )?address)"
+                r"(\s*line\s*1)?\s*\*?$"), ("address", "street address")),
+    (re.compile(r"(?i)^(state|province|state\s*/\s*province|region)\s*\*?$"), ("state",)),
+    (re.compile(r"(?i)^(country|country of residence)\s*\*?$"), ("country",)),
     (re.compile(r"(?i)how did you hear"), ("how did you hear", "referral source")),
 ]
 

@@ -149,7 +149,18 @@ def _latest(db: DB, model: type, user: User, job_id: uuid.UUID):  # noqa: ANN202
 # Postings scraped from job boards rarely state skills/experience in a parseable way, so their scores run low.
 # When the title clearly matches a target role, a lower bar applies.
 TITLE_MATCH_MIN_SCORE = 40.0
-_SENIOR = re.compile(r"(?i)\b(principal|lead|architect|manager|staff|director|head|vp|vice president|sr\.?|senior)\b")
+_SENIOR = re.compile(r"(?i)\b(principal|lead|architect|manager|staff|director|head|vp|vice president|sr\.?|senior|sse|"
+                     r"(sde|swe|sdet|mts)\s*[-–]?\s*(ii|iii|iv|[2-4])|"
+                     r"(engineer|developer|programmer)\s*[-–(]?\s*(ii|iii|iv|[2-4])(?!\s*[\d.\-–+]|\s*(yrs|years|to))|"
+                     r"[5-9]\+?\s*(yrs|years))\b")
+
+
+def too_senior(title: str, years: float) -> str:
+    """The senior marker in a job title ('SDE-2', 'Engineer II', 'Lead', '5+ years') when it's above your level."""
+    if years >= 3:
+        return ""
+    m = _SENIOR.search(title or "")
+    return m.group(0) if m else ""
 
 
 class _ExpRow:
@@ -196,10 +207,11 @@ def evaluate(body: JobIn, db: DB, user: ExtUser) -> dict:
     score = round(m.overall_score, 1) if m else 0.0
     p = profile_to_dict(profile)
     years = total_experience_years([_ExpRow(e) for e in p.get("experiences") or []]) or 0.0
-    if years < 3 and _SENIOR.search(job.title):
+    senior = too_senior(job.title, years)
+    if senior:
         db.commit()
         return {"job_id": str(job.id), "decision": "skip", "score": score,
-                "reason": f"senior role ({_SENIOR.search(job.title).group(0)}) for {years:.1f} years of experience"}
+                "reason": f"senior role ({senior}) for {years:.1f} years of experience"}
     title_match = next((c.get("score") or 0 for c in (m.components if m else []) if c.get("key") == "role_alignment"), 0)
     threshold = min(cfg.min_match_score, TITLE_MATCH_MIN_SCORE) if title_match >= 80 else cfg.min_match_score
     if score < threshold:
@@ -629,6 +641,8 @@ def queue(db: DB, user: ExtUser, limit: int = 30) -> list[dict]:
     from app.api.apply_queue import _queue_rows
 
     cfg = get_config(db, user.id)
+    profile = require_active_profile(db, user)
+    years = total_experience_years([_ExpRow(e) for e in profile_to_dict(profile).get("experiences") or []]) or 0.0
     out: list[dict] = []
     seen: set[uuid.UUID] = set()
     # Already accepted for applying but parked only because they apply on the company site: the extension does
@@ -638,6 +652,8 @@ def queue(db: DB, user: ExtUser, limit: int = 30) -> list[dict]:
                                Job.hidden.is_(False), Job.status != "expired")
                         .order_by(Application.match_score.desc().nulls_last())).all()
     for app, job in parked:
+        if too_senior(job.title, years):
+            continue
         step = queue_step(job) if _company_site_only(app) else None
         if step:
             seen.add(job.id)
@@ -646,6 +662,8 @@ def queue(db: DB, user: ExtUser, limit: int = 30) -> list[dict]:
     for job, score, app in _queue_rows(db, user, cfg.min_match_score):
         if job.id in seen or (app is not None and app.status == "needs_input"):
             continue  # needs_input here = waiting for an answer only you can give
+        if too_senior(job.title, years):
+            continue
         step = queue_step(job)
         if step:
             out.append({"job_id": str(job.id), "title": job.title, "company": job.company, "score": round(score, 1), **step})

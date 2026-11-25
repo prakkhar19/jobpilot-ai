@@ -26,7 +26,7 @@ const DEFAULTS = {
   log: [],
 };
 
-const STEP_TIMEOUT_MIN = { "linkedin-search": 3, "linkedin-job": 5, "naukri-search": 3, "naukri-job": 4, "instahyre": 20, ats: 8,
+const STEP_TIMEOUT_MIN = { "linkedin-search": 3, "linkedin-job": 5, "naukri-search": 3, "naukri-job": 4, "naukri-profile": 3, "instahyre": 20, ats: 8,
   "linkedin-outreach": 6 };
 
 let external = null; // { opener, tab, url, done, at } while following an "Apply on company site" click
@@ -193,6 +193,19 @@ function searchTargets(cfg) {
   return out;
 }
 
+// LinkedIn people search for recruiters/HR at a company we just applied to. Naukri's confidential posters
+// ("Leading Fintech Company", "Reputed MNC") can't be looked up, so they get no step.
+function outreachStep(job) {
+  const generic = /^(a |an |the )?(leading|reputed|top|well[- ]known|confidential|large|growing|global|client of|mnc\b)/i;
+  if (!job || !job.company || generic.test(job.company.trim())) return null;
+  const name = job.company.replace(/\s*\(.*?\)\s*/g, " ").replace(/[™®©]/g, "")
+    .replace(/\s+(pvt\.?|private|ltd\.?|limited|inc\.?|llp|llc)\b.*$/i, "").replace(/"/g, "").trim();
+  if (!name) return null;
+  const kw = `"${name}" AND (recruiter OR HR OR "talent acquisition" OR hiring)`;
+  return { kind: "linkedin-outreach", job, label: `Outreach: ${job.company}`,
+    url: `https://www.linkedin.com/search/results/people/?keywords=${enc(kw)}&origin=GLOBAL_SEARCH_HEADER` };
+}
+
 async function buildSteps() {
   const s = await state();
   const cfg = await api("/api/ext/config");
@@ -200,18 +213,16 @@ async function buildSteps() {
   await set({ stats: s.stats, lastConfig: cfg });
   const p = s.settings.platforms;
   const steps = [];
-  // Jobs JobPilot already found and scored (company boards + LinkedIn/Naukri alert emails) go first.
-  if (p.company) {
-    try {
-      const q = await api(`/api/ext/queue?limit=${Math.max(5, s.settings.dailyCap)}`);
-      const allowed = { ats: true, "linkedin-job": p.linkedin, "naukri-job": p.naukri };
-      for (const j of q) {
-        const kind = j.kind || "ats";
-        if (!allowed[kind]) continue;
-        steps.push({ kind, url: j.url, jobId: j.job_id, label: `${j.company}: ${j.title} (${j.score})` });
-      }
-      await log(`Already-matched jobs to apply to first: ${steps.length}.`);
-    } catch (e) { await log(`Matched-jobs queue: ${e.message}`); }
+  // Recruiter outreach and the daily Naukri profile refresh go first: a cycle is long and restarts from the top
+  // whenever Chrome or the extension reloads, so anything at the end rarely ran.
+  if (s.settings.outreach) {
+    const queue = s.outreachQueue.filter((j) => outreachStep(j));
+    if (queue.length !== s.outreachQueue.length) await set({ outreachQueue: queue });
+    for (const job of queue.slice(0, 10)) steps.push(outreachStep(job));
+  }
+  // Naukri ranks recently updated profiles higher in recruiter searches: touch the profile once a day.
+  if (p.naukri && s.naukriRefreshedOn !== s.stats.date) {
+    steps.push({ kind: "naukri-profile", url: "https://www.naukri.com/mnjuser/profile", label: "Naukri: refresh profile" });
   }
   const targets = searchTargets(cfg);
   // Experience filters: LinkedIn levels 1 internship, 2 entry, 3 associate, 4 mid-senior; Naukri takes your years.
@@ -235,13 +246,22 @@ async function buildSteps() {
       steps.push({ kind: "naukri-search", url, label: `Naukri: ${t.role} · ${t.remote ? "Remote" : t.location}` });
     }
   }
-  if (p.instahyre) steps.push({ kind: "instahyre", url: "https://www.instahyre.com/candidate/opportunities/?matching=true", label: "Instahyre matches" });
-  if (s.settings.outreach) {
-    for (const job of s.outreachQueue.slice(0, 10)) {
-      steps.push({ kind: "linkedin-outreach", job, label: `Outreach: ${job.company}`,
-        url: `https://www.linkedin.com/search/results/people/?keywords=${enc(`${job.company} recruiter`)}&origin=GLOBAL_SEARCH_HEADER` });
-    }
+  // Jobs JobPilot already found and scored (company boards + alert emails) come after the fresh searches: fresh
+  // postings get far more replies, and this backlog is mostly sign-in-walled company sites.
+  if (p.company) {
+    try {
+      const before = steps.length;
+      const q = await api(`/api/ext/queue?limit=${Math.max(5, s.settings.dailyCap)}`);
+      const allowed = { ats: true, "linkedin-job": p.linkedin, "naukri-job": p.naukri };
+      for (const j of q) {
+        const kind = j.kind || "ats";
+        if (!allowed[kind]) continue;
+        steps.push({ kind, url: j.url, jobId: j.job_id, label: `${j.company}: ${j.title} (${j.score})` });
+      }
+      await log(`Already-matched jobs (after fresh searches): ${steps.length - before}.`);
+    } catch (e) { await log(`Matched-jobs queue: ${e.message}`); }
   }
+  if (p.instahyre) steps.push({ kind: "instahyre", url: "https://www.instahyre.com/candidate/opportunities/?matching=true", label: "Instahyre matches" });
   return steps;
 }
 
@@ -349,8 +369,15 @@ async function handle(msg, sender) {
           missing: msg.missing || [], at: Date.now() }, ...s.needsYou.filter((n) => n.jobId !== msg.jobId)].slice(0, 200);
       }
       if (o === "submitted" && msg.platform !== "outreach" && s.settings.outreach && msg.company) {
-        patch.outreachQueue = [...s.outreachQueue.filter((j) => j.company !== msg.company),
-          { jobId: msg.jobId, company: msg.company, title: msg.title }].slice(-50);
+        const job = { jobId: msg.jobId, company: msg.company, title: msg.title };
+        patch.outreachQueue = [...s.outreachQueue.filter((j) => j.company !== msg.company), job].slice(-50);
+        // Reach out right after applying, while the application is fresh, instead of waiting for the next cycle.
+        const step = s.stats.outreach < s.settings.outreachCap && outreachStep(job);
+        if (step && s.steps.length && !s.steps.some((x) => x.url === step.url)) {
+          const steps = [...s.steps];
+          steps.splice(s.stepIndex + 1, 0, step);
+          patch.steps = steps;
+        }
       }
       await set(patch);
       if (o === "needs_you") {
@@ -539,6 +566,7 @@ async function handle(msg, sender) {
       if (msg.outreachDone) {
         await set({ outreachQueue: s.outreachQueue.filter((j) => j.jobId !== msg.outreachDone) });
       }
+      if (msg.naukriRefreshed) await set({ naukriRefreshedOn: s.stats.date });
       if (msg.note) await log(msg.note);
       await advance({ keepTab: !!msg.keepTab });
       return {};

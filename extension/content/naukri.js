@@ -69,6 +69,13 @@
     }
   } catch (e) { await log(`Error: ${e.message}`); }
 
+  if (task.kind === "naukri-profile") {
+    let ok = false;
+    try { ok = await refreshProfile(); } catch (e) { await log(`Naukri profile refresh: ${e.message}`); }
+    return bg("stepDone", { naukriRefreshed: true, note: ok ? "🔄 Naukri profile refreshed (recruiters see it as active today)."
+      : "Naukri profile refresh didn't confirm — see the dump above." });
+  }
+
   try {
     if (task.kind === "naukri-search") await search();
     else if (task.kind === "naukri-job") await job(ctx);
@@ -76,6 +83,33 @@
     await log(`Error: ${e.message}`);
   }
   bg("stepDone", {});
+
+  // Open the "Resume headline" editor and save it unchanged: Naukri then marks the profile as updated today,
+  // which lifts it in recruiter searches (Naukri sorts candidates by profile freshness).
+  async function refreshProfile() {
+    const heading = await waitFor(() => [...document.querySelectorAll("span, div, h2, h3")]
+      .find((e) => visible(e) && /^resume headline$/i.test(text(e)) && e.children.length <= 2), 15000);
+    if (!heading) { await debugDump("naukri-profile"); return false; }
+    let box = heading;
+    let edit = null;
+    for (let i = 0; i < 6 && box && !edit; i++) {
+      box = box.parentElement;
+      edit = box && [...box.querySelectorAll("span, i, button, a, em, div")].find((e) => visible(e)
+        && (/(^|\s)(edit|editOneTheme)(\s|$)|icon-edit|edit-icon/i.test(String(e.className)) || /^edit$/i.test(text(e))
+            || /^edit/i.test(e.getAttribute("aria-label") || "")));
+    }
+    if (!edit) { await debugDump("naukri-profile"); return false; }
+    edit.click();
+    const save = await waitFor(() => [...document.querySelectorAll("button, input[type='submit'], [role='button']")]
+      .find((b) => visible(b) && /^save$/i.test(text(b) || b.value || "")), 10000);
+    if (!save) { await debugDump("naukri-profile-editor"); return false; }
+    await pause(800, 1600);
+    save.click();
+    const closed = await waitFor(() => !document.body.contains(save) || !visible(save)
+      || /success|updated|saved/i.test(text(document.querySelector("[class*='success'], [class*='toast'], [class*='msg']"))), 10000);
+    if (!closed) await debugDump("naukri-profile-save");
+    return !!closed;
+  }
 
   async function search() {
     await waitFor(".srp-jobtuple-wrapper, article.jobTuple, .cust-job-tuple", 15000);

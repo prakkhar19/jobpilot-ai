@@ -233,3 +233,30 @@ def test_lpa_questions_get_plain_numbers():
     from app.api.extension import _as_number
     assert _as_number("8-9 LPA", "What are your salary expectations (in LPA)?") == "8"
     assert _as_number("6 LPA", "What is your current CTC in INR?") == "600000"
+
+
+def test_too_senior_flags_levels_above_entry():
+    from app.api.extension import too_senior
+    for t in ["SDE-2 (Backend)", "Software Engineer II", "Backend Engineer III", "Lead Software Engineer",
+              "Senior Developer", "SSE - Node", "Developer (5+ years)"]:
+        assert too_senior(t, 1.0), t
+    for t in ["SDE 1", "Software Engineer (L1)", "Associate Software Engineer", "Software Engineer 2025 Batch",
+              "Full Stack Developer 2-4 yrs", "Software Development Engineer"]:
+        assert not too_senior(t, 1.0), t
+    assert not too_senior("SDE-2", 4.0)
+
+
+def test_address_fields_map_from_facts():
+    from app.adapters.application_providers.base import FormField, map_candidate_data
+    profile = {"full_name": "A B", "email": "a@b.c",
+               "application_facts": {"Address": "7th Avenue", "Postal code": "201318", "State": "UP"}}
+    fields = [FormField(name="addr", label="Address Line 1", required=True),
+              FormField(name="pin", label="Pin Code", required=True),
+              FormField(name="st", label="State", required=True),
+              FormField(name="em", label="Email address", required=True)]
+    answers, missing = map_candidate_data(fields, profile, {})
+    assert answers["addr"]["value"] == "7th Avenue"
+    assert answers["pin"]["value"] == "201318"
+    assert answers["st"]["value"] == "UP"
+    assert answers["em"]["value"] == "a@b.c"
+    assert not missing

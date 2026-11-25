@@ -167,6 +167,23 @@
       if (t === "checkbox") { f.type = "checkbox"; f.options = ["Yes", "No"]; }
       fields.push(f);
     }
+    // LinkedIn's new forms have no <label> per option: each radio's aria-label is "<question> <option>". Take the
+    // part after the labels' shared prefix as the option ("Yes"/"No") when the usual lookup found nothing useful.
+    for (const f of radios.values()) {
+      const als = f.els.map((e) => (e.getAttribute("aria-label") || "").replace(/\s+/g, " ").trim());
+      if (als.length < 2 || als.some((a) => !a)) continue;
+      const weak = f.options.some((o, i) => !o || !/[a-z0-9]/i.test(o) || o === f.els[i].value && /^(urn:|[0-9_:-]+$)/i.test(o))
+        || new Set(f.options.map((o) => o.toLowerCase())).size < f.options.length;
+      if (!weak) continue;
+      let n = 0;
+      while (als.every((a) => a[n] === als[0][n]) && n < als[0].length) n++;
+      while (n > 0 && /\S/.test(als[0][n - 1]) && als.some((a) => /\S/.test(a[n] || ""))) n--; // back to a word boundary
+      const opts = als.map((a) => a.slice(n).trim());
+      if (!opts.every(Boolean)) continue;
+      f.options = opts;
+      const q = als[0].slice(0, n).replace(/[\s:,-]+$/, "").trim();
+      if (q.length >= 5) f.label = q.slice(0, 300);
+    }
     return fields;
   }
 

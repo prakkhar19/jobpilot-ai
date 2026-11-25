@@ -103,11 +103,11 @@
   // data attributes and the page source, then visit each job's own page.
   function jobIdsOnPage() {
     const ids = new Set();
-    document.querySelectorAll("[data-job-id], [data-occludable-job-id]").forEach((e) => {
+    deepAll(document, "[data-job-id], [data-occludable-job-id]").forEach((e) => {
       const v = e.getAttribute("data-job-id") || e.getAttribute("data-occludable-job-id");
       if (/^\d{6,}$/.test(v)) ids.add(v);
     });
-    document.querySelectorAll("a[href*='/jobs/view/'], a[href*='currentJobId=']").forEach((a) => {
+    deepAll(document, "a[href*='/jobs/view/'], a[href*='currentJobId=']").forEach((a) => {
       const m = a.href.match(/\/jobs\/view\/(\d{6,})/) || a.href.match(/currentJobId=(\d{6,})/);
       if (m) ids.add(m[1]);
     });
@@ -115,7 +115,30 @@
     return [...ids];
   }
 
-  async function collectJobs() {
+  // LinkedIn's public job-listing endpoint (what logged-out visitors see): returns job cards as HTML for the same
+  // filters. Used when the logged-in search page (which LinkedIn keeps redesigning) shows few or no jobs.
+  async function guestJobIds(searchUrl) {
+    const src = new URL(searchUrl, location.origin).searchParams;
+    const q = new URLSearchParams();
+    for (const k of ["keywords", "location", "f_TPR", "f_E", "f_WT", "sortBy"]) if (src.get(k)) q.set(k, src.get(k));
+    const start = Number(src.get("start") || 0);
+    const ids = new Set();
+    for (let off = start; off < start + 25; off += 10) {
+      q.set("start", String(off));
+      try {
+        const res = await fetch(`/jobs-guest/jobs/api/seeMoreJobPostings/search?${q}`, { credentials: "omit" });
+        if (!res.ok) break;
+        const html = await res.text();
+        const before = ids.size;
+        for (const m of html.matchAll(/jobPosting:(\d{6,})|\/jobs\/view\/[^"?]*?-(\d{6,})/g)) ids.add(m[1] || m[2]);
+        if (ids.size === before) break;
+      } catch (_) { break; }
+      await pause(700, 1500);
+    }
+    return [...ids];
+  }
+
+  async function collectJobs(ctx) {
     await waitFor(() => jobIdsOnPage().length, 15000);
     // Scroll whatever list is on the page so lazy-loaded jobs render.
     const scrollers = [...document.querySelectorAll("div, ul, main")].filter((e) => e.scrollHeight > e.clientHeight + 200
@@ -125,7 +148,12 @@
       window.scrollBy(0, 700);
       await sleep(600);
     }
-    const ids = jobIdsOnPage().slice(0, 25);
+    let ids = jobIdsOnPage().slice(0, 25);
+    if (ids.length < 5 && ctx && ctx.task && ctx.task.url) {
+      const extra = await guestJobIds(ctx.task.url);
+      ids = [...new Set([...ids, ...extra])].slice(0, 25);
+      if (extra.length) await log(`LinkedIn: search page showed few jobs; found ${extra.length} more from LinkedIn's job listings.`);
+    }
     await log(`LinkedIn: ${ids.length} jobs found on this search.`);
     if (ids.length < 3) await debugDump("linkedin-search");
     if (ids.length) {
@@ -485,28 +513,73 @@
 
   // ---------------------------------------------------------------------------------------- outreach
 
+  // People-search result cards, found by structure rather than class names (LinkedIn's new UI obfuscates them):
+  // the smallest block around one profile link that also holds that person's Connect control.
+  const isConnect = (b) => /^Connect$/i.test(text(b)) || /Invite .* to connect/i.test(b.getAttribute("aria-label") || "");
+  function peopleCards() {
+    // Start from each Connect control and widen until the block holds a profile link: that block is the person's
+    // card. (Cards also link the "mutual connections", so widening from the profile link side overshoots.)
+    const cards = new Map();
+    for (const connect of deepAll(document, "button, a, [role='button']").filter((b) => visible(b) && isConnect(b))) {
+      let el = connect;
+      for (let i = 0; i < 10 && el; i++) {
+        el = el.parentElement;
+        if (!el) break;
+        const link = el.querySelector("a[href*='/in/']");
+        if (!link) continue;
+        const url = (link.href || "").split("?")[0];
+        if (!cards.has(url)) cards.set(url, { el, connect, url, link });
+        break;
+      }
+    }
+    return [...cards.values()];
+  }
+
   async function outreach({ task, settings, outreachLeft }) {
     const job = task.job;
-    await waitFor(() => document.querySelector(".reusable-search__result-container, [data-chameleon-result-urn], .search-results-container li, [data-view-name='search-entity-result-universal-template']"), 15000);
-    await sleep(1500);
-    const results = [...document.querySelectorAll(".reusable-search__result-container, li:has([data-chameleon-result-urn]), [data-view-name='search-entity-result-universal-template']")];
+    await waitFor(() => deepAll(document, "a[href*='/in/']").length, 15000);
+    await sleep(2000);
+    window.scrollBy(0, 800);
+    await sleep(1200);
+    const cards = peopleCards();
+    if (!cards.length && !deepAll(document, "a[href*='/in/']").length && /%22|"/.test(location.search)) {
+      // The exact search ("Company" AND recruiter/HR) found nobody: try once more with a plain one.
+      const company = job.company.replace(/\s*\(.*?\)\s*/g, " ").replace(/[™®©"]/g, "").trim();
+      await log(`Outreach: nobody on the exact search for ${company}; trying a broader one.`);
+      location.href = `/search/results/people/?keywords=${encodeURIComponent(`${company} recruiter`)}&origin=GLOBAL_SEARCH_HEADER`;
+      return "navigated";
+    }
+    if (!cards.length) {
+      const links = deepAll(document, "a[href*='/in/']");
+      const counts = {};
+      deepAll(document, "button, a, [role='button']").filter(visible).forEach((x) => {
+        const t = (text(x).length <= 20 ? text(x) : "") || (x.getAttribute("aria-label") || "").replace(/ .*? (to connect|to follow)/, " … $1").slice(0, 30);
+        if (t) counts[t] = (counts[t] || 0) + 1;
+      });
+      const buttons = Object.entries(counts).filter(([, n]) => n > 1).map(([t, n]) => `${t}×${n}`).slice(0, 15);
+      await log(`Outreach page: ${links.length} profile links; action buttons: ${buttons.join(" | ") || "none"}`);
+      await debugDump("linkedin-outreach");
+    }
     let sent = 0;
     const cap = Math.min(settings.perCompany || 2, outreachLeft);
     const company = job.company.toLowerCase();
-    for (const r of results) {
+    const key = (company.split(/\s+/)[0] || "").replace(/[^a-z0-9]/g, "");
+    for (const c of cards) {
       if (sent >= cap) break;
-      const t = text(r).toLowerCase();
-      if (!t.includes(company.split(" ")[0])) continue; // must actually work there
-      const connect = [...r.querySelectorAll("button")].find((b) => /^Connect$/i.test(text(b)) || /Invite .* to connect/i.test(b.getAttribute("aria-label") || ""));
-      if (!connect) continue;
-      const name = text(r.querySelector(".entity-result__title-text a span[aria-hidden='true'], a[href*='/in/'] span[aria-hidden='true']")) || "";
-      const title = text(r.querySelector(".entity-result__primary-subtitle, .t-14.t-black.t-normal")) || "";
-      const profileUrl = (r.querySelector("a[href*='/in/']")?.href || "").split("?")[0];
-      if (!name) continue;
+      const lines = (c.el.innerText || "").split("\n").map((x) => x.trim()).filter(Boolean);
+      if (key && !lines.join(" ").toLowerCase().replace(/[^a-z0-9 ]/g, "").includes(key)) continue; // must actually work there
+      const connect = c.connect;
+      const fromLabel = ((connect.getAttribute("aria-label") || "").match(/^Invite (.+?) to connect/i) || [])[1] || "";
+      const name = (fromLabel || text(c.link.querySelector("span[aria-hidden='true']")) || lines[0] || "")
+        .replace(/\s*[•·].*$/, "").replace(/\b(View|Status is).*$/i, "").trim();
+      const title = lines.find((l, i) => i > 0 && l.length > 8 && !/^(•|·|\d+(st|nd|rd|th)|connect|message|follow|view)/i.test(l)
+        && !l.includes(name)) || "";
+      const profileUrl = c.url;
+      if (!name || name.length > 80) continue;
       const { note } = await bg("api", { path: "/api/ext/outreach-note", method: "POST",
         body: { job_id: job.jobId, person_name: name, person_title: title } });
       connect.click();
-      const dlg = await waitFor(() => [...document.querySelectorAll("div[role='dialog']")].find(visible), 6000);
+      const dlg = await waitFor(() => deepAll(document, "div[role='dialog'], [role='dialog']").find(visible), 6000);
       if (!dlg) continue;
       if (dlg.querySelector("input[type='email']")) { // LinkedIn wants their email address: skip this person
         dlg.querySelector("button[aria-label='Dismiss']")?.click();
@@ -516,23 +589,23 @@
       const addNote = byText("button", /^Add a note$/i, dlg);
       if (addNote) {
         addNote.click();
-        const ta = await waitFor(() => document.querySelector("textarea#custom-message, textarea[name='message']"), 4000);
+        const ta = await waitFor(() => deepAll(document, "textarea#custom-message, textarea[name='message'], textarea").find(visible), 4000);
         if (ta) { setValue(ta, note); usedNote = note; await sleep(800); }
       }
       const send = await waitFor(() => {
-        const d = [...document.querySelectorAll("div[role='dialog']")].find(visible);
+        const d = deepAll(document, "div[role='dialog'], [role='dialog']").find(visible);
         return d && ([...d.querySelectorAll("button")].find((b) => /^Send( now| invitation)?$/i.test(text(b)) && !b.disabled)
           || [...d.querySelectorAll("button")].find((b) => /^Send without a note$/i.test(text(b))));
       }, 5000);
       if (!send) {
-        document.querySelector("div[role='dialog'] button[aria-label='Dismiss']")?.click();
+        deepAll(document, "[role='dialog'] button[aria-label='Dismiss']")[0]?.click();
         continue;
       }
       if (/without a note/i.test(text(send))) usedNote = "";
       send.click();
       await sleep(1500);
       // Premium upsell ("You've used your free personalised invitations") → close it and send plain.
-      const upsell = [...document.querySelectorAll("div[role='dialog']")].find(visible);
+      const upsell = deepAll(document, "div[role='dialog'], [role='dialog']").find(visible);
       if (upsell) {
         const plain = byText("button", /Send without a note/i, upsell);
         if (plain) { plain.click(); usedNote = ""; await sleep(1200); } else upsell.querySelector("button[aria-label='Dismiss']")?.click();
@@ -544,14 +617,14 @@
       sent += 1;
       await pause(4000, 9000);
     }
-    if (!sent) await log(`No one to connect with at ${job.company} on this page.`);
+    if (!sent) await log(`No one to connect with at ${job.company} on this page (${cards.length} people with a Connect button).`);
   }
   // Runs last, so every const above is initialised before the page handlers use it.
   let r;
   try {
     if (task.kind === "linkedin-search") await collectJobs(ctx);
     else if (task.kind === "linkedin-job") r = await jobPage(ctx);
-    else if (task.kind === "linkedin-outreach") await outreach(ctx);
+    else if (task.kind === "linkedin-outreach") r = await outreach(ctx);
   } catch (e) {
     await log(`Error: ${e.message}`);
   }
