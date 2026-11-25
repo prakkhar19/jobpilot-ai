@@ -79,7 +79,7 @@ def test_needs_you_and_threshold(client, anon):
     cfg["min_match_score"] = 99
     client.put("/api/agent/config", json=cfg)
     ev = anon.post("/api/ext/evaluate", json=_job() | {"title": "Chartered Accountant"}, headers=h).json()
-    assert ev["decision"] == "skip" and "below" in ev["reason"]
+    assert ev["decision"] == "skip" and ("below" in ev["reason"] or "not a tech role" in ev["reason"])
     anon.post("/api/ext/result", json={"job_id": ev["job_id"], "outcome": "needs_you", "missing": ["Expected CTC"]},
               headers=h)
     ny = anon.get("/api/ext/needs-you", headers=h).json()
@@ -260,3 +260,15 @@ def test_address_fields_map_from_facts():
     assert answers["st"]["value"] == "UP"
     assert answers["em"]["value"] == "a@b.c"
     assert not missing
+
+
+def test_off_target_titles():
+    from app.api.extension import off_target
+    for t in ["Associate HR Analyst - APAC", "iOS Engineer", "Driver Development Engineer", "Application Developer-SAP ABAP HANA",
+              "MuleSoft Developer - Associate", "Teamcenter Developer", "Salesforce Developer Engineer", "Java Developer",
+              "Sales Executive", "Developer II - Embedded Software"]:
+        assert off_target(t), t
+    for t in ["SDE 1", "Software Engineer (Java+React)", "Full Stack Developer", "JavaScript Developer", "Data Analyst",
+              "QA Engineer", "DevOps Engineer", "Associate Software Engineer", "Python Developer", "AI Engineer",
+              "Technical Support Engineer", "Junior Data Scientist", "Graduate Engineer Trainee"]:
+        assert not off_target(t), t

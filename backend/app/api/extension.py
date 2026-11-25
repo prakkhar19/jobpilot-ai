@@ -155,6 +155,31 @@ _SENIOR = re.compile(r"(?i)\b(principal|lead|architect|manager|staff|director|he
                      r"[5-9]\+?\s*(yrs|years))\b")
 
 
+# Titles outside your stack (JS/TS, React, Node, Python, SQL, AWS) or outside software altogether.
+_OFF_STACK = re.compile(r"(?i)\b(hr|human resources?|recruit\w*|talent|sales(?!force)|marketing|account(ant|ing)|finance|"
+                        r"ios|android|mobile|flutter|swift|kotlin|embedded|firmware|driver|hardware|vlsi|rtl|asic|fpga|pcb|"
+                        r"mechanical|civil|electrical|chemical|salesforce|sap|abap|mulesoft|teamcenter|servicenow|pega|"
+                        r"mainframe|cobol|as400|oracle (ebs|apps|fusion)|dynamics|sharepoint|unity|unreal|game|"
+                        r"c\+\+|c#|\.net|dotnet|golang|rust|scala|php|laravel|wordpress|ruby|rails|"
+                        r"java(?!script)|spring|j2ee)(?![\w+#])")
+_YOUR_STACK = re.compile(r"(?i)react|node|next\.?js|javascript|typescript|\bjs\b|python|django|fastapi|flask|mern|"
+                         r"full[\s-]?stack|front[\s-]?end|back[\s-]?end|\bai\b|\bml\b|llm|gen\s?ai")
+_TECH = re.compile(r"(?i)engineer|developer|\bsde\b|\bswe\b|programmer|scientist|analyst|devops|sdet|\bqa\b|tester|"
+                   r"\btest|trainee|software|\bdata\b|cloud|web|full[\s-]?stack|front[\s-]?end|back[\s-]?end|\bai\b|\bml\b")
+
+
+def off_target(title: str) -> str:
+    """Why a job title is outside your field ('Associate HR Analyst', 'iOS Engineer', 'SAP ABAP Developer'), or ''.
+    A title naming your stack still passes ('Software Engineer (Java+React)')."""
+    t = title or ""
+    if not _TECH.search(t):
+        return "not a tech role"
+    m = _OFF_STACK.search(t)
+    if m and not _YOUR_STACK.search(t):
+        return f"outside your stack ({m.group(0)})"
+    return ""
+
+
 def too_senior(title: str, years: float) -> str:
     """The senior marker in a job title ('SDE-2', 'Engineer II', 'Lead', '5+ years') when it's above your level."""
     if years >= 3:
@@ -196,7 +221,7 @@ def evaluate(body: JobIn, db: DB, user: ExtUser) -> dict:
     if app is not None and app.status in svc.POST_SUBMISSION:
         return {"job_id": str(job.id), "decision": "skip", "reason": "already applied", "score": app.match_score}
 
-    reason = _excluded(cfg, body)
+    reason = _excluded(cfg, body) or off_target(body.title)
     if reason:
         return {"job_id": str(job.id), "decision": "skip", "reason": reason, "score": None}
     try:
@@ -652,7 +677,7 @@ def queue(db: DB, user: ExtUser, limit: int = 30) -> list[dict]:
                                Job.hidden.is_(False), Job.status != "expired")
                         .order_by(Application.match_score.desc().nulls_last())).all()
     for app, job in parked:
-        if too_senior(job.title, years):
+        if too_senior(job.title, years) or off_target(job.title):
             continue
         step = queue_step(job) if _company_site_only(app) else None
         if step:
@@ -662,7 +687,7 @@ def queue(db: DB, user: ExtUser, limit: int = 30) -> list[dict]:
     for job, score, app in _queue_rows(db, user, cfg.min_match_score):
         if job.id in seen or (app is not None and app.status == "needs_input"):
             continue  # needs_input here = waiting for an answer only you can give
-        if too_senior(job.title, years):
+        if too_senior(job.title, years) or off_target(job.title):
             continue
         step = queue_step(job)
         if step:
